@@ -14,6 +14,38 @@ st.set_page_config(layout="wide")
 st.title("Yacht Code")
 
 # =========================
+# Ticker Source Selector
+# =========================
+source_option = st.radio(
+    "Select Ticker Source:",
+    ["Nifty50", "Upload ticker file"]
+)
+
+tickers = []
+
+if source_option == "Nifty50":
+    try:
+        # Load local Nifty50.txt (should exist in repo)
+        with open("Nifty50.txt", "r") as f:
+            content = f.read()
+        tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
+    except FileNotFoundError:
+        st.error("Nifty50.txt not found in the repository.")
+        st.stop()
+
+elif source_option == "Upload ticker file":
+    uploaded_file = st.file_uploader(
+        "Upload ticker file (comma separated)",
+        type=["txt"]
+    )
+    if uploaded_file is not None:
+        content = uploaded_file.read().decode("utf-8")
+        tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
+    else:
+        st.warning("Upload a ticker file to begin.")
+        st.stop()
+
+# =========================
 # Trigger Input Inline
 # =========================
 trigger_col, input_col = st.columns([1, 2])
@@ -25,11 +57,6 @@ with input_col:
 # =========================
 # Sidebar Controls
 # =========================
-uploaded_file = st.sidebar.file_uploader(
-    "Upload ticker file (comma separated)",
-    type=["txt"]
-)
-
 timeframe = st.sidebar.selectbox(
     "Timeframe",
     ["5m", "15m", "1h"],
@@ -50,18 +77,7 @@ telegram_token = st.sidebar.text_input("Bot Token", type="password")
 telegram_chat_id = st.sidebar.text_input("Chat ID")
 
 st_autorefresh(interval=refresh_sec * 1000, key="refresh")
-
 st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-# =========================
-# Load Tickers
-# =========================
-if uploaded_file is not None:
-    content = uploaded_file.read().decode("utf-8")
-    tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
-else:
-    st.warning("Upload a ticker file to begin.")
-    st.stop()
 
 # =========================
 # Efficient Bulk Fetch
