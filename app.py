@@ -5,6 +5,8 @@ import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 import requests
+import ast
+import operator as op
 
 st.set_page_config(layout="wide")
 
@@ -25,7 +27,6 @@ tickers = []
 
 if source_option == "Nifty50":
     try:
-        # Load local Nifty50.txt (should exist in repo)
         with open("Nifty50.txt", "r") as f:
             content = f.read()
         tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
@@ -46,13 +47,18 @@ elif source_option == "Upload ticker file":
         st.stop()
 
 # =========================
-# Trigger Input Inline
+# Trigger Input
 # =========================
 trigger_col, input_col = st.columns([1, 2])
 with trigger_col:
     st.markdown("**Trigger:**")
 with input_col:
     trigger_condition = st.text_input("", value="Close > Open")
+
+st.caption(
+    "Use Close, Open, High, Low, Volume. "
+    "Reference previous candles like Close[-2], High[-3]"
+)
 
 # =========================
 # Sidebar Controls
@@ -80,13 +86,14 @@ st_autorefresh(interval=refresh_sec * 1000, key="refresh")
 st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # =========================
-# Efficient Bulk Fetch
+# Fetch Data
 # =========================
 @st.cache_data(ttl=10)
 def fetch_data(tickers, timeframe):
+    period = "5d" if timeframe in ["5m", "15m"] else "30d"
     return yf.download(
         tickers=tickers,
-        period="1d",
+        period=period,
         interval=timeframe,
         group_by="ticker",
         progress=False,
@@ -95,21 +102,85 @@ def fetch_data(tickers, timeframe):
 
 raw = fetch_data(tickers, timeframe)
 
+if raw.empty:
+    st.warning("No data received from Yahoo Finance.")
+    st.stop()
+
 # =========================
-# Trigger Evaluation
+# Safe Expression Engine
 # =========================
+operators = {
+    ast.Gt: op.gt,
+    ast.Lt: op.lt,
+    ast.GtE: op.ge,
+    ast.LtE: op.le,
+    ast.Eq: op.eq,
+    ast.NotEq: op.ne,
+    ast.Add: op.add,
+    ast.Sub: op.sub,
+    ast.Mult: op.mul,
+    ast.Div: op.truediv,
+    ast.And: op.and_,
+    ast.Or: op.or_,
+}
+
 def check_trigger(df, condition):
     try:
-        last = df.iloc[-1]
-        context = {
-            "Open": float(last["Open"]),
-            "High": float(last["High"]),
-            "Low": float(last["Low"]),
-            "Close": float(last["Close"]),
-            "Volume": float(last["Volume"]),
-        }
-        return bool(eval(condition, {}, context))
-    except:
+        if len(df) < 2:
+            return False
+
+        def get_value(name, index=-1):
+            if name not in ["Open", "High", "Low", "Close", "Volume"]:
+                raise ValueError("Invalid field")
+
+            if abs(index) > len(df):
+                raise ValueError("Index out of range")
+
+            return float(df.iloc[index][name])
+
+        def _eval(node):
+            if isinstance(node, ast.Expression):
+                return _eval(node.body)
+
+            elif isinstance(node, ast.BoolOp):
+                values = [_eval(v) for v in node.values]
+                result = values[0]
+                for v in values[1:]:
+                    result = operators[type(node.op)](result, v)
+                return result
+
+            elif isinstance(node, ast.Compare):
+                left = _eval(node.left)
+                right = _eval(node.comparators[0])
+                return operators[type(node.ops[0])](left, right)
+
+            elif isinstance(node, ast.BinOp):
+                return operators[type(node.op)](
+                    _eval(node.left),
+                    _eval(node.right)
+                )
+
+            elif isinstance(node, ast.Subscript):
+                field = node.value.id
+                index = _eval(node.slice)
+                return get_value(field, index)
+
+            elif isinstance(node, ast.Name):
+                return get_value(node.id, -1)
+
+            elif isinstance(node, ast.Constant):
+                return node.value
+
+            elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+                return -_eval(node.operand)
+
+            else:
+                raise TypeError(node)
+
+        parsed = ast.parse(condition, mode='eval')
+        return bool(_eval(parsed))
+
+    except Exception:
         return False
 
 # =========================
@@ -132,16 +203,14 @@ for ticker in tickers:
     if ticker not in raw:
         continue
 
-    df = raw[ticker].dropna().tail(10)
-    if df.empty or len(df) < 2:
+    df = raw[ticker].dropna().tail(20)
+    if df.empty or len(df) < 3:
         continue
 
     triggered = check_trigger(df, trigger_condition)
     results.append((ticker, df, triggered))
 
-# Sort triggered first
 results.sort(key=lambda x: x[2], reverse=True)
-
 triggered_count = sum(1 for r in results if r[2])
 
 # =========================
@@ -149,7 +218,6 @@ triggered_count = sum(1 for r in results if r[2])
 # =========================
 st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
 
-# Telegram notifications
 if "previous_triggers" not in st.session_state:
     st.session_state.previous_triggers = set()
 
@@ -162,7 +230,7 @@ for ticker in new_triggers:
 st.session_state.previous_triggers = current_triggers
 
 # =========================
-# Display Grid (4 per row)
+# Display Grid
 # =========================
 cards_per_row = 4
 
@@ -189,7 +257,7 @@ for i in range(0, len(results), cards_per_row):
                     padding:10px;
                 ">
                 <b>{ticker}</b>
-                {'<span style="background:yellow;color:black;padding:2px 6px;border-radius:4px;margin-left:8px;">TRIGGERRED</span>' if triggered else ''}
+                {'<span style="background:yellow;color:black;padding:2px 6px;border-radius:4px;margin-left:8px;">TRIGGERED</span>' if triggered else ''}
                 </div>
                 """,
                 unsafe_allow_html=True
