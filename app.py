@@ -74,8 +74,8 @@ timeframe = st.sidebar.selectbox(
 refresh_sec = st.sidebar.number_input(
     "Refresh interval (seconds)",
     min_value=5,
-    max_value=300,
-    value=15,
+    max_value=900,
+    value=890,
     step=5
 )
 
@@ -311,4 +311,5 @@ for i in range(0, len(results), cards_per_row):
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
+
 
