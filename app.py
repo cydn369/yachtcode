@@ -220,7 +220,7 @@ for ticker in tickers:
     if ticker not in raw:
         continue
 
-    df = raw[ticker].dropna().tail(30)
+    df = raw[ticker].dropna().tail(10)
     if df.empty:
         continue
 
@@ -311,3 +311,4 @@ for i in range(0, len(results), cards_per_row):
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
+
