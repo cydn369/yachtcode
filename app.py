@@ -56,8 +56,10 @@ with input_col:
     trigger_condition = st.text_input("", value="Close > Open")
 
 st.caption(
-    "Use Close, Open, High, Low, Volume. "
-    "Reference previous candles like Close[-2], High[-3]"
+    "Fields: Close, Open, High, Low, Volume | "
+    "Previous candles: Close[-2], High[-3] | "
+    "Functions: abs(), max(), min() | "
+    "Operators: and, or, not"
 )
 
 # =========================
@@ -120,13 +122,19 @@ operators = {
     ast.Sub: op.sub,
     ast.Mult: op.mul,
     ast.Div: op.truediv,
-    ast.And: op.and_,
-    ast.Or: op.or_,
+    ast.And: lambda a, b: a and b,
+    ast.Or: lambda a, b: a or b,
+}
+
+allowed_functions = {
+    "abs": abs,
+    "max": max,
+    "min": min,
 }
 
 def check_trigger(df, condition):
     try:
-        if len(df) < 2:
+        if len(df) < 3:
             return False
 
         def get_value(name, index=-1):
@@ -143,11 +151,16 @@ def check_trigger(df, condition):
                 return _eval(node.body)
 
             elif isinstance(node, ast.BoolOp):
-                values = [_eval(v) for v in node.values]
-                result = values[0]
-                for v in values[1:]:
-                    result = operators[type(node.op)](result, v)
+                result = _eval(node.values[0])
+                for v in node.values[1:]:
+                    result = operators[type(node.op)](result, _eval(v))
                 return result
+
+            elif isinstance(node, ast.UnaryOp):
+                if isinstance(node.op, ast.USub):
+                    return -_eval(node.operand)
+                if isinstance(node.op, ast.Not):
+                    return not _eval(node.operand)
 
             elif isinstance(node, ast.Compare):
                 left = _eval(node.left)
@@ -165,14 +178,18 @@ def check_trigger(df, condition):
                 index = _eval(node.slice)
                 return get_value(field, index)
 
+            elif isinstance(node, ast.Call):
+                func_name = node.func.id
+                if func_name not in allowed_functions:
+                    raise ValueError("Function not allowed")
+                args = [_eval(arg) for arg in node.args]
+                return allowed_functions[func_name](*args)
+
             elif isinstance(node, ast.Name):
                 return get_value(node.id, -1)
 
             elif isinstance(node, ast.Constant):
                 return node.value
-
-            elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-                return -_eval(node.operand)
 
             else:
                 raise TypeError(node)
@@ -203,8 +220,8 @@ for ticker in tickers:
     if ticker not in raw:
         continue
 
-    df = raw[ticker].dropna().tail(20)
-    if df.empty or len(df) < 3:
+    df = raw[ticker].dropna().tail(30)
+    if df.empty:
         continue
 
     triggered = check_trigger(df, trigger_condition)
