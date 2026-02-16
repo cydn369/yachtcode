@@ -248,6 +248,19 @@ if st.sidebar.button("Test Alerts"):
     st.sidebar.success("Test alerts sent!")
 
 # =========================
+# ACTIVATE ALERTS TOGGLE
+# =========================
+alerts_active = st.sidebar.checkbox(
+    "Activate Alerts",
+    value=False
+)
+
+if alerts_active:
+    st.sidebar.success("Alerts are ACTIVE")
+else:
+    st.sidebar.warning("Alerts are OFF")
+
+# =========================
 # Process Tickers
 # =========================
 results = []
@@ -274,10 +287,11 @@ if "previous_triggers" not in st.session_state:
 current_triggers = {r[0] for r in results if r[2]}
 new_triggers = current_triggers - st.session_state.previous_triggers
 
-for ticker in new_triggers:
-    message = f"{ticker} triggered condition: {trigger_condition}"
-    send_telegram(message)
-    send_email(f"Yacht Code Alert: {ticker}", message)
+if alerts_active:
+    for ticker in new_triggers:
+        message = f"{ticker} triggered condition: {trigger_condition}"
+        send_telegram(message)
+        send_email(f"Yacht Code Alert: {ticker}", message)
 
 st.session_state.previous_triggers = current_triggers
 
@@ -334,4 +348,5 @@ for i in range(0, len(results), cards_per_row):
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
+
 
