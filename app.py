@@ -7,8 +7,21 @@ from datetime import datetime
 import requests
 import ast
 import operator as op
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 st.set_page_config(layout="wide")
+
+# =========================
+# LOAD SECRETS (Streamlit Cloud)
+# =========================
+gmail_user = st.secrets["gmail_user"]
+gmail_password = st.secrets["gmail_password"]
+alert_emails = st.secrets["alert_emails"]
+
+telegram_token = st.secrets["telegram_token"]
+telegram_chat_id = st.secrets["telegram_chat_id"]
 
 # =========================
 # TITLE
@@ -79,11 +92,6 @@ refresh_sec = st.sidebar.number_input(
     step=5
 )
 
-# Telegram Settings
-st.sidebar.markdown("### Telegram Alerts")
-telegram_token = st.sidebar.text_input("Bot Token", type="password")
-telegram_chat_id = st.sidebar.text_input("Chat ID")
-
 st_autorefresh(interval=refresh_sec * 1000, key="refresh")
 st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -107,6 +115,10 @@ raw = fetch_data(tickers, timeframe)
 if raw.empty:
     st.warning("No data received from Yahoo Finance.")
     st.stop()
+
+# Fix single ticker structure
+if not isinstance(raw.columns, pd.MultiIndex):
+    raw = pd.concat({tickers[0]: raw}, axis=1)
 
 # =========================
 # Safe Expression Engine
@@ -140,10 +152,6 @@ def check_trigger(df, condition):
         def get_value(name, index=-1):
             if name not in ["Open", "High", "Low", "Close", "Volume"]:
                 raise ValueError("Invalid field")
-
-            if abs(index) > len(df):
-                raise ValueError("Index out of range")
-
             return float(df.iloc[index][name])
 
         def _eval(node):
@@ -204,12 +212,40 @@ def check_trigger(df, condition):
 # Telegram Alert
 # =========================
 def send_telegram(message):
-    if telegram_token and telegram_chat_id:
-        url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
-        requests.post(url, data={
-            "chat_id": telegram_chat_id,
-            "text": message
-        })
+    url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
+    requests.post(url, data={
+        "chat_id": telegram_chat_id,
+        "text": message
+    })
+
+# =========================
+# Email Alert
+# =========================
+def send_email(subject, message):
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = gmail_user
+        msg["To"] = ", ".join(alert_emails)
+        msg["Subject"] = subject
+
+        msg.attach(MIMEText(message, "plain"))
+
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(gmail_user, gmail_password)
+        server.sendmail(gmail_user, alert_emails, msg.as_string())
+        server.quit()
+
+    except Exception as e:
+        st.sidebar.error(f"Email error: {e}")
+
+# =========================
+# TEST BUTTON
+# =========================
+if st.sidebar.button("Test Alerts"):
+    send_telegram("Test Telegram from Yacht Code")
+    send_email("Test Email", "This is a test email from Yacht Code.")
+    st.sidebar.success("Test alerts sent!")
 
 # =========================
 # Process Tickers
@@ -230,9 +266,6 @@ for ticker in tickers:
 results.sort(key=lambda x: x[2], reverse=True)
 triggered_count = sum(1 for r in results if r[2])
 
-# =========================
-# Trigger Summary
-# =========================
 st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
 
 if "previous_triggers" not in st.session_state:
@@ -242,7 +275,9 @@ current_triggers = {r[0] for r in results if r[2]}
 new_triggers = current_triggers - st.session_state.previous_triggers
 
 for ticker in new_triggers:
-    send_telegram(f"{ticker} triggered condition: {trigger_condition}")
+    message = f"{ticker} triggered condition: {trigger_condition}"
+    send_telegram(message)
+    send_email(f"Yacht Code Alert: {ticker}", message)
 
 st.session_state.previous_triggers = current_triggers
 
@@ -264,21 +299,9 @@ for i in range(0, len(results), cards_per_row):
         color = "#16a34a" if change >= 0 else "#dc2626"
 
         with col:
-            border_color = "yellow" if triggered else "#e5e7eb"
-
-            st.markdown(
-                f"""
-                <div style="
-                    border:2px solid {border_color};
-                    border-radius:10px;
-                    padding:10px;
-                ">
-                <b>{ticker}</b>
-                {'<span style="background:yellow;color:black;padding:2px 6px;border-radius:4px;margin-left:8px;">TRIGGERED</span>' if triggered else ''}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            st.markdown(f"**{ticker}**")
+            if triggered:
+                st.success("TRIGGERED")
 
             st.markdown(f"### {latest:.4f}")
             st.markdown(
@@ -311,5 +334,3 @@ for i in range(0, len(results), cards_per_row):
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
-
-
