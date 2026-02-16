@@ -8,13 +8,14 @@ import requests
 import ast
 import operator as op
 import smtplib
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 st.set_page_config(layout="wide")
 
 # =========================
-# LOAD SECRETS (Streamlit Cloud)
+# LOAD SECRETS
 # =========================
 gmail_user = st.secrets["gmail_user"]
 gmail_password = st.secrets["gmail_password"]
@@ -75,6 +76,14 @@ st.caption(
     "Operators: and, or, not"
 )
 
+# Reset triggers if condition changes
+if "last_trigger_condition" not in st.session_state:
+    st.session_state.last_trigger_condition = trigger_condition
+
+if trigger_condition != st.session_state.last_trigger_condition:
+    st.session_state.previous_triggers = {}
+    st.session_state.last_trigger_condition = trigger_condition
+
 # =========================
 # Sidebar Controls
 # =========================
@@ -100,7 +109,12 @@ st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 # =========================
 @st.cache_data(ttl=10)
 def fetch_data(tickers, timeframe):
-    period = "5d" if timeframe in ["5m", "15m"] else "30d"
+    period = {
+        "5m": "2d",
+        "15m": "5d",
+        "1h": "15d"
+    }[timeframe]
+
     return yf.download(
         tickers=tickers,
         period=period,
@@ -116,7 +130,6 @@ if raw.empty:
     st.warning("No data received from Yahoo Finance.")
     st.stop()
 
-# Fix single ticker structure
 if not isinstance(raw.columns, pd.MultiIndex):
     raw = pd.concat({tickers[0]: raw}, axis=1)
 
@@ -183,7 +196,10 @@ def check_trigger(df, condition):
 
             elif isinstance(node, ast.Subscript):
                 field = node.value.id
-                index = _eval(node.slice)
+                if isinstance(node.slice, ast.Constant):
+                    index = node.slice.value
+                else:
+                    index = _eval(node.slice)
                 return get_value(field, index)
 
             elif isinstance(node, ast.Call):
@@ -227,7 +243,6 @@ def send_email(subject, message):
         msg["From"] = gmail_user
         msg["To"] = ", ".join(alert_emails)
         msg["Subject"] = subject
-
         msg.attach(MIMEText(message, "plain"))
 
         server = smtplib.SMTP("smtp.gmail.com", 587)
@@ -240,16 +255,13 @@ def send_email(subject, message):
         st.sidebar.error(f"Email error: {e}")
 
 # =========================
-# TEST BUTTON
+# TEST BUTTON + ACTIVATE
 # =========================
 if st.sidebar.button("Test Alerts"):
     send_telegram("Test Telegram from Yacht Code")
     send_email("Test Email", "This is a test email from Yacht Code.")
     st.sidebar.success("Test alerts sent!")
 
-# =========================
-# ACTIVATE ALERTS TOGGLE
-# =========================
 alerts_active = st.sidebar.checkbox(
     "Activate Alerts",
     value=False
@@ -258,7 +270,7 @@ alerts_active = st.sidebar.checkbox(
 if alerts_active:
     st.sidebar.success("Alerts are ACTIVE")
 else:
-    st.sidebar.warning("Alerts are OFF")
+    st.sidebar.info("Alerts are OFF")
 
 # =========================
 # Process Tickers
@@ -282,16 +294,29 @@ triggered_count = sum(1 for r in results if r[2])
 st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
 
 if "previous_triggers" not in st.session_state:
-    st.session_state.previous_triggers = set()
+    st.session_state.previous_triggers = {}
 
-current_triggers = {r[0] for r in results if r[2]}
-new_triggers = current_triggers - st.session_state.previous_triggers
+current_triggers = {}
+
+for ticker, df, triggered in results:
+    if triggered:
+        candle_time = df.index[-1]
+        current_triggers[ticker] = candle_time
+
+new_triggers = []
+for ticker, candle_time in current_triggers.items():
+    if (
+        ticker not in st.session_state.previous_triggers
+        or st.session_state.previous_triggers[ticker] != candle_time
+    ):
+        new_triggers.append(ticker)
 
 if alerts_active:
     for ticker in new_triggers:
         message = f"{ticker} triggered condition: {trigger_condition}"
         send_telegram(message)
         send_email(f"Yacht Code Alert: {ticker}", message)
+        time.sleep(0.5)
 
 st.session_state.previous_triggers = current_triggers
 
@@ -348,5 +373,3 @@ for i in range(0, len(results), cards_per_row):
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
-
-
