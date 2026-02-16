@@ -4,4 +4,3 @@ pandas
 plotly
 streamlit-autorefresh
 requests
-time
