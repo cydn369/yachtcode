@@ -76,14 +76,6 @@ st.caption(
     "Operators: and, or, not"
 )
 
-# Reset triggers if condition changes
-if "last_trigger_condition" not in st.session_state:
-    st.session_state.last_trigger_condition = trigger_condition
-
-if trigger_condition != st.session_state.last_trigger_condition:
-    st.session_state.previous_triggers = {}
-    st.session_state.last_trigger_condition = trigger_condition
-
 # =========================
 # Sidebar Controls
 # =========================
@@ -273,7 +265,7 @@ else:
     st.sidebar.info("Alerts are OFF")
 
 # =========================
-# Process Tickers
+# Process Tickers (Simple Mode)
 # =========================
 results = []
 
@@ -293,32 +285,14 @@ triggered_count = sum(1 for r in results if r[2])
 
 st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
 
-if "previous_triggers" not in st.session_state:
-    st.session_state.previous_triggers = {}
-
-current_triggers = {}
-
-for ticker, df, triggered in results:
-    if triggered:
-        candle_time = df.index[-1]
-        current_triggers[ticker] = candle_time
-
-new_triggers = []
-for ticker, candle_time in current_triggers.items():
-    if (
-        ticker not in st.session_state.previous_triggers
-        or st.session_state.previous_triggers[ticker] != candle_time
-    ):
-        new_triggers.append(ticker)
-
+# Send alerts if activated
 if alerts_active:
-    for ticker in new_triggers:
-        message = f"{ticker} triggered condition: {trigger_condition}"
-        send_telegram(message)
-        send_email(f"Yacht Code Alert: {ticker}", message)
-        time.sleep(0.5)
-
-st.session_state.previous_triggers = current_triggers
+    for ticker, df, triggered in results:
+        if triggered:
+            message = f"{ticker} triggered condition: {trigger_condition}"
+            send_telegram(message)
+            send_email(f"Yacht Code Alert: {ticker}", message)
+            time.sleep(0.3)
 
 # =========================
 # Display Grid
