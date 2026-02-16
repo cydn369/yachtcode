@@ -10,15 +10,14 @@ import operator as op
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import io
-from PIL import Image
 from email.mime.base import MIMEBase
 from email import encoders
+import io
 
 st.set_page_config(layout="wide")
 
 # =========================
-# LOAD SECRETS (Streamlit Cloud)
+# Load secrets from Streamlit Cloud
 # =========================
 gmail_user = st.secrets["gmail_user"]
 gmail_password = st.secrets["gmail_password"]
@@ -28,12 +27,12 @@ telegram_token = st.secrets["telegram_token"]
 telegram_chat_id = st.secrets["telegram_chat_id"]
 
 # =========================
-# TITLE
+# Title
 # =========================
 st.title("Yacht Code")
 
 # =========================
-# Ticker Source Selector
+# Ticker Source
 # =========================
 source_option = st.radio(
     "Select Ticker Source:",
@@ -120,7 +119,6 @@ if raw.empty:
     st.warning("No data received from Yahoo Finance.")
     st.stop()
 
-# Fix single ticker structure
 if not isinstance(raw.columns, pd.MultiIndex):
     raw = pd.concat({tickers[0]: raw}, axis=1)
 
@@ -211,11 +209,11 @@ def send_telegram(message):
     })
 
 # =========================
-# Helper: Plotly Figure → Image
+# Helper: Plotly Figure → PNG for email
 # =========================
 def fig_to_image(fig):
     buf = io.BytesIO()
-    fig.write_image(buf, format="png", engine="kaleido")
+    fig.write_image(buf, format="png")  # small PNG
     buf.seek(0)
     return buf
 
@@ -269,7 +267,7 @@ if st.sidebar.button("Test Alerts"):
         increasing_line_color="#16a34a",
         decreasing_line_color="#dc2626"
     )])
-    fig.update_layout(height=300, xaxis_rangeslider_visible=False)
+    fig.update_layout(height=300, xaxis_rangeslider_visible=False, showlegend=False, template="plotly_white")
     send_email("Test Email with Chart", "This is a test email with chart", fig)
     send_telegram("Test Telegram from Yacht Code")
     st.sidebar.success("Test alerts with chart sent!")
@@ -305,7 +303,7 @@ for ticker in new_triggers:
     message = f"{ticker} triggered condition: {trigger_condition}"
     df = [r[1] for r in results if r[0]==ticker][0]
 
-    # Plotly figure for email
+    # Plotly chart
     fig = go.Figure(
         data=[go.Candlestick(
             x=df.index,
