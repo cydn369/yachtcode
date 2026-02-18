@@ -90,7 +90,7 @@ def get_autorefresh_interval(timeframe):
 st_autorefresh(interval=get_autorefresh_interval(timeframe), key="auto_refresh")
 
 # =========================
-# SHOW COUNTDOWN CAPTION
+# STATIC COUNTDOWN CAPTION
 # =========================
 def seconds_until_next_candle(timeframe):
     now = datetime.now()
@@ -103,9 +103,9 @@ def seconds_until_next_candle(timeframe):
     elif timeframe == "1h":
         next_candle = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     refresh_time = next_candle - timedelta(seconds=30)
-    return max((refresh_time - now).total_seconds(), 0)
+    return max(int((refresh_time - now).total_seconds()), 0)
 
-st.caption(f"Next refresh in ~{int(seconds_until_next_candle(timeframe))} seconds (30s before candle)")
+st.caption(f"Next refresh in ~{seconds_until_next_candle(timeframe)} seconds (30s before candle)")
 
 # =========================
 # LOAD TICKERS
@@ -307,3 +307,4 @@ for i in range(0, len(results), cards_per_row):
                 template="plotly_white"
             )
             st.plotly_chart(fig, use_container_width=True)
+
