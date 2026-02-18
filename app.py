@@ -314,18 +314,43 @@ for i in range(0, len(results), cards_per_row):
             st.plotly_chart(fig, use_container_width=True)
 
 # =========================
-# SERVER-SIDE AUTO REFRESH
+# CANDLE-ALIGNED AUTO REFRESH
 # =========================
-interval_seconds_map = {
-    "1m": 60,
-    "5m": 300,
-    "15m": 900,
-    "1h": 3600
-}
 
-sleep_seconds = interval_seconds_map[timeframe]
+def seconds_until_next_candle(timeframe):
+    now = datetime.now()
 
-st.caption(f"Next refresh in {sleep_seconds} seconds")
+    if timeframe == "1m":
+        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
+
+    elif timeframe == "5m":
+        minutes_to_add = 5 - (now.minute % 5)
+        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=minutes_to_add)
+
+    elif timeframe == "15m":
+        minutes_to_add = 15 - (now.minute % 15)
+        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=minutes_to_add)
+
+    elif timeframe == "1h":
+        next_candle = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+
+    # Align 30 seconds BEFORE candle
+    refresh_time = next_candle - timedelta(seconds=30)
+
+    sleep_seconds = (refresh_time - now).total_seconds()
+
+    # Safety: if negative (rare edge case), fallback to small delay
+    if sleep_seconds < 1:
+        sleep_seconds = 5
+
+    return sleep_seconds
+
+
+sleep_seconds = seconds_until_next_candle(timeframe)
+
+st.caption(f"Next refresh in {int(sleep_seconds)} seconds (30s before candle)")
 
 time.sleep(sleep_seconds)
 st.rerun()
+
+
