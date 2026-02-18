@@ -330,7 +330,8 @@ for i in range(0, len(results), cards_per_row):
             )
             fig.update_xaxes(showgrid=False, zeroline=False)
             fig.update_yaxes(showgrid=False, zeroline=False)
-            st.plotly_chart(fig, width="Stretch")
+            st.plotly_chart(fig, width='stretch')
+
 
 
 
