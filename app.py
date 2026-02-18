@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 import ast
 import operator as op
@@ -12,7 +12,17 @@ import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+# =========================
+# PAGE CONFIG
+# =========================
 st.set_page_config(layout="wide")
+st.title("Yacht Code")
+
+# =========================
+# SESSION STATE (Alert Lock)
+# =========================
+if "last_alert" not in st.session_state:
+    st.session_state.last_alert = {}
 
 # =========================
 # LOAD SECRETS
@@ -25,12 +35,40 @@ telegram_token = st.secrets["telegram_token"]
 telegram_chat_id = st.secrets["telegram_chat_id"]
 
 # =========================
-# TITLE
+# CANDLE-SYNCED REFRESH
 # =========================
-st.title("Yacht Code")
+def seconds_until_next_refresh(timeframe):
+    now = datetime.now()
+
+    if timeframe == "1m":
+        target = now.replace(second=50, microsecond=0)
+        if now.second >= 50:
+            target += timedelta(minutes=1)
+
+    elif timeframe == "5m":
+        minute_block = (now.minute // 5) * 5
+        target = now.replace(minute=minute_block + 4, second=30, microsecond=0)
+        if now >= target:
+            target += timedelta(minutes=5)
+
+    elif timeframe == "15m":
+        minute_block = (now.minute // 15) * 15
+        target = now.replace(minute=minute_block + 14, second=0, microsecond=0)
+        if now >= target:
+            target += timedelta(minutes=15)
+
+    elif timeframe == "1h":
+        target = now.replace(minute=59, second=0, microsecond=0)
+        if now >= target:
+            target += timedelta(hours=1)
+
+    else:
+        return 60
+
+    return max(1, int((target - now).total_seconds()))
 
 # =========================
-# Ticker Source Selector
+# TICKER SOURCE
 # =========================
 source_option = st.radio(
     "Select Ticker Source:",
@@ -45,7 +83,7 @@ if source_option == "Nifty50":
             content = f.read()
         tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
     except FileNotFoundError:
-        st.error("Nifty50.txt not found in the repository.")
+        st.error("Nifty50.txt not found.")
         st.stop()
 
 elif source_option == "Upload ticker file":
@@ -61,47 +99,49 @@ elif source_option == "Upload ticker file":
         st.stop()
 
 # =========================
-# Trigger Input
+# TRIGGER CONDITION
 # =========================
-trigger_col, input_col = st.columns([1, 2])
+trigger_col, input_col = st.columns([1, 3])
 with trigger_col:
     st.markdown("**Trigger:**")
-with input_col:
-    trigger_condition = st.text_input("", value="Close > Open")
 
-st.caption(
-    "Fields: Close, Open, High, Low, Volume | "
-    "Previous candles: Close[-2], High[-3] | "
-    "Functions: abs(), max(), min() | "
-    "Operators: and, or, not"
-)
+with input_col:
+    trigger_condition = st.text_input(
+        "",
+        value="((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))"
+    )
 
 # =========================
-# Sidebar Controls
+# SIDEBAR
 # =========================
 timeframe = st.sidebar.selectbox(
     "Timeframe",
-    ["5m", "15m", "1h"],
-    index=1
+    ["1m", "5m", "15m", "1h"],
+    index=2
 )
 
-refresh_sec = st.sidebar.number_input(
-    "Refresh interval (seconds)",
-    min_value=5,
-    max_value=900,
-    value=890,
-    step=5
-)
+alerts_active = st.sidebar.checkbox("Activate Alerts", value=True)
 
-st_autorefresh(interval=refresh_sec * 1000, key="refresh")
+if alerts_active:
+    st.sidebar.success("Alerts ACTIVE")
+else:
+    st.sidebar.info("Alerts OFF")
+
+# =========================
+# AUTO REFRESH
+# =========================
+seconds_to_wait = seconds_until_next_refresh(timeframe)
+st_autorefresh(interval=seconds_to_wait * 1000, key="refresh")
+st.caption(f"Next refresh in {seconds_to_wait} seconds")
 st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # =========================
-# Fetch Data
+# FETCH DATA
 # =========================
 @st.cache_data(ttl=10)
 def fetch_data(tickers, timeframe):
     period = {
+        "1m": "1d",
         "5m": "2d",
         "15m": "5d",
         "1h": "15d"
@@ -119,14 +159,14 @@ def fetch_data(tickers, timeframe):
 raw = fetch_data(tickers, timeframe)
 
 if raw.empty:
-    st.warning("No data received from Yahoo Finance.")
+    st.warning("No data received.")
     st.stop()
 
 if not isinstance(raw.columns, pd.MultiIndex):
     raw = pd.concat({tickers[0]: raw}, axis=1)
 
 # =========================
-# Safe Expression Engine
+# SAFE EXPRESSION ENGINE
 # =========================
 operators = {
     ast.Gt: op.gt,
@@ -157,6 +197,8 @@ def check_trigger(df, condition):
         def get_value(name, index=-1):
             if name not in ["Open", "High", "Low", "Close", "Volume"]:
                 raise ValueError("Invalid field")
+            if abs(index) > len(df):
+                raise ValueError("Index out of range")
             return float(df.iloc[index][name])
 
         def _eval(node):
@@ -181,10 +223,7 @@ def check_trigger(df, condition):
                 return operators[type(node.ops[0])](left, right)
 
             elif isinstance(node, ast.BinOp):
-                return operators[type(node.op)](
-                    _eval(node.left),
-                    _eval(node.right)
-                )
+                return operators[type(node.op)](_eval(node.left), _eval(node.right))
 
             elif isinstance(node, ast.Subscript):
                 field = node.value.id
@@ -202,7 +241,7 @@ def check_trigger(df, condition):
                 return allowed_functions[func_name](*args)
 
             elif isinstance(node, ast.Name):
-                return get_value(node.id, -1)
+                return get_value(node.id)
 
             elif isinstance(node, ast.Constant):
                 return node.value
@@ -217,7 +256,7 @@ def check_trigger(df, condition):
         return False
 
 # =========================
-# Telegram Alert
+# TELEGRAM
 # =========================
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
@@ -227,45 +266,7 @@ def send_telegram(message):
     })
 
 # =========================
-# Email Alert
-# =========================
-def send_email(subject, message):
-    try:
-        msg = MIMEMultipart()
-        msg["From"] = gmail_user
-        msg["To"] = ", ".join(alert_emails)
-        msg["Subject"] = subject
-        msg.attach(MIMEText(message, "plain"))
-
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(gmail_user, gmail_password)
-        server.sendmail(gmail_user, alert_emails, msg.as_string())
-        server.quit()
-
-    except Exception as e:
-        st.sidebar.error(f"Email error: {e}")
-
-# =========================
-# TEST BUTTON + ACTIVATE
-# =========================
-if st.sidebar.button("Test Alerts"):
-    send_telegram("Test Telegram from Yacht Code")
-    send_email("Test Email", "This is a test email from Yacht Code.")
-    st.sidebar.success("Test alerts sent!")
-
-alerts_active = st.sidebar.checkbox(
-    "Activate Alerts",
-    value=False
-)
-
-if alerts_active:
-    st.sidebar.success("Alerts are ACTIVE")
-else:
-    st.sidebar.info("Alerts are OFF")
-
-# =========================
-# Process Tickers (Simple Mode)
+# PROCESS TICKERS
 # =========================
 results = []
 
@@ -285,17 +286,52 @@ triggered_count = sum(1 for r in results if r[2])
 
 st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
 
-# Send alerts if activated
+# =========================
+# ALERT ENGINE
+# =========================
 if alerts_active:
+
+    try:
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(gmail_user, gmail_password)
+    except Exception as e:
+        server = None
+        st.sidebar.error(f"SMTP error: {e}")
+
     for ticker, df, triggered in results:
-        if triggered:
+        if not triggered:
+            continue
+
+        last_candle_time = df.index[-1]
+
+        if ticker not in st.session_state.last_alert:
+            st.session_state.last_alert[ticker] = None
+
+        if st.session_state.last_alert[ticker] != last_candle_time:
+
             message = f"{ticker} triggered condition: {trigger_condition}"
             send_telegram(message)
-            send_email(f"Yacht Code Alert: {ticker}", message)
+
+            if server:
+                try:
+                    msg = MIMEMultipart()
+                    msg["From"] = gmail_user
+                    msg["To"] = ", ".join(alert_emails)
+                    msg["Subject"] = f"Yacht Code Alert: {ticker}"
+                    msg.attach(MIMEText(message, "plain"))
+                    server.sendmail(gmail_user, alert_emails, msg.as_string())
+                except Exception as e:
+                    st.sidebar.error(f"Email error for {ticker}: {e}")
+
+            st.session_state.last_alert[ticker] = last_candle_time
             time.sleep(0.3)
 
+    if server:
+        server.quit()
+
 # =========================
-# Display Grid
+# DISPLAY GRID
 # =========================
 cards_per_row = 4
 
@@ -313,8 +349,9 @@ for i in range(0, len(results), cards_per_row):
 
         with col:
             st.markdown(f"**{ticker}**")
+
             if triggered:
-                st.success("TRIGGERED")
+                st.warning("TRIGGERED")
 
             st.markdown(f"### {latest:.4f}")
             st.markdown(
