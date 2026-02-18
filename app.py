@@ -173,31 +173,26 @@ if st.sidebar.button("Test Alerts"):
     st.sidebar.success("Test alerts sent!")
 
 # =========================
-# Fetch last 10 candles (single ticker at a time)
+# Fetch Data (5d for all intervals)
 # =========================
 @st.cache_data(ttl=10)
-def fetch_last_10_candles(ticker, timeframe):
-    period_map = {"1m": "2d", "5m": "2d", "15m": "3d", "1h": "5d"}
-    period = period_map.get(timeframe, "5d")
+def fetch_data(tickers, timeframe):
+    period_map = {"1m": "5d", "5m": "5d", "15m": "5d", "1h": "5d"}  # 5d for all
     df = yf.download(
-        tickers=ticker,
-        period=period,
+        tickers=tickers,
+        period=period_map[timeframe],
         interval=timeframe,
-        progress=False
+        group_by="ticker",
+        progress=False,
+        threads=True
     )
-    if df.empty:
-        return df
-    # Ensure the dataframe has all needed columns
-    df = df[["Open","High","Low","Close"]]
-    return df.tail(10)
+    if not isinstance(df.columns, pd.MultiIndex):
+        df = pd.concat({tickers[0]: df}, axis=1)
+    return df
 
-raw = {}
-for ticker in tickers:
-    df = fetch_last_10_candles(ticker, timeframe)
-    if not df.empty:
-        raw[ticker] = df
+raw = fetch_data(tickers, timeframe)
 
-if not raw:
+if raw.empty:
     st.warning("No data received from Yahoo Finance.")
     st.stop()
 
@@ -250,8 +245,9 @@ def check_trigger(df, condition):
 # Process tickers and trigger
 # =========================
 results = []
-for ticker, df in raw.items():
-    df = df.dropna()
+for ticker in tickers:
+    if ticker not in raw: continue
+    df = raw[ticker].dropna().tail(10)  # last 10 candles
     if df.empty: continue
     triggered = check_trigger(df, trigger_text)
     results.append((ticker, df, triggered))
@@ -314,7 +310,6 @@ for i in range(0, len(results), cards_per_row):
                 unsafe_allow_html=True
             )
 
-            # Plotly candlestick (no gaps, exact order)
             fig = go.Figure(
                 data=[go.Candlestick(
                     x=df.index,
@@ -336,4 +331,3 @@ for i in range(0, len(results), cards_per_row):
             fig.update_xaxes(showgrid=False, zeroline=False)
             fig.update_yaxes(showgrid=False, zeroline=False)
             st.plotly_chart(fig, use_container_width=True)
-
