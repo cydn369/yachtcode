@@ -1,130 +1,132 @@
-[
-  {
-    "name": "Default",
-    "formula": "((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))"
-  },
-  {
-    "name": "Bullish Marubozu",
-    "formula": "(Close[-2] > Open[-2]) and (High[-2] - Close[-2] <= 0.05*(Close[-2]-Open[-2])) and (Open[-2] - Low[-2] <= 0.05*(Close[-2]-Open[-2])) and (Close[-1] > Open[-1]) and (Close[-1] > High[-2])"
-  },
-  {
-    "name": "Bearish Marubozu",
-    "formula": "(Open[-2] > Close[-2]) and (High[-2] - Open[-2] <= 0.05*(Open[-2]-Close[-2])) and (Close[-2] - Low[-2] <= 0.05*(Open[-2]-Close[-2])) and (Close[-1] < Open[-1]) and (Close[-1] < Low[-2])"
-  },
-  {
-    "name": "Doji",
-    "formula": "abs(Close - Open) <= 0.2*(High - Low)"
-  },
-  {
-    "name": "Hammer",
-    "formula": "(min(Open[-2], Close[-2]) - Low[-2] >= 1.5*abs(Close[-2]-Open[-2])) and (High[-2]-max(Open[-2],Close[-2]) <= 1.5*abs(Close[-2]-Open[-2])) and (Close[-1]>Open[-1]) and (Close[-1]>High[-2])"
-  },
-  {
-    "name": "Inverted Hammer",
-    "formula": "(High[-2]-max(Open[-2],Close[-2]) >= 1.5*abs(Close[-2]-Open[-2])) and (min(Open[-2], Close[-2])-Low[-2] <= 1.5*abs(Close[-2]-Open[-2])) and (Close[-1]>Open[-1]) and (Close[-1]>High[-2])"
-  },
-  {
-    "name": "Bullish Engulfing",
-    "formula": "(Close[-3] < Open[-3]) and (Close[-2] > Open[-2]) and (Open[-2] <= Close[-3]) and (Close[-2] >= Open[-3]) and (Close[-1] > Open[-1]) and (Close[-1] > High[-2])"
-  },
-  {
-    "name": "Bearish Engulfing",
-    "formula": "(Close[-3] > Open[-3]) and (Close[-2] < Open[-2]) and (Open[-2] >= Close[-3]) and (Close[-2] <= Open[-3]) and (Close[-1] < Open[-1]) and (Close[-1] < Low[-2])"
-  },
-  {
-    "name": "Morning Star",
-    "formula": "(Close[-4] < Open[-4]) and (abs(Close[-3]-Open[-3]) < 0.5*abs(Open[-4]-Close[-4])) and (Close[-3] < Close[-4]) and (Close[-2] > Open[-2]) and (Close[-2] > (Open[-4]+Close[-4])/2) and (Close[-1] > Open[-1]) and (Close[-1] > High[-2])"
-  },
-  {
-    "name": "Evening Star",
-    "formula": "(Close[-4] > Open[-4]) and (abs(Close[-3]-Open[-3]) < 0.5*abs(Close[-4]-Open[-4])) and (Close[-3] > Close[-4]) and (Close[-2] < Open[-2]) and (Close[-2] < (Open[-4]+Close[-4])/2) and (Close[-1] < Open[-1]) and (Close[-1] < Low[-2])"
-  },
-  {
-    "name": "Piercing Line",
-    "formula": "(Close[-3] < Open[-3]) and (Open[-2] < Close[-3]) and (Close[-2] > (Open[-3]+Close[-3])/2) and (Close[-2] < Open[-3]) and (Close[-1] > Open[-1]) and (Close[-1] > High[-2])"
-  },
-  {
-    "name": "Dark Cloud Cover",
-    "formula": "(Close[-3] > Open[-3]) and (Open[-2] > Close[-3]) and (Close[-2] < (Open[-3]+Close[-3])/2) and (Close[-2] > Open[-3]) and (Close[-1] < Open[-1]) and (Close[-1] < Low[-2])"
-  },
-  {
-    "name": "Spinning Top",
-    "formula": "(abs(Close-Open) <= 0.4*(High-Low)) and ((High-max(Open,Close)) >= 0.5*abs(Close-Open)) and ((min(Open,Close)-Low) >= 0.5*abs(Close-Open))"
-  },
-  {
-    "name": "Rising Three Methods",
-    "formula": "(Close[-5]>Open[-5] and (Close[-5]-Open[-5])>0.6*(High[-5]-Low[-5])) and (High[-4]<=High[-5] and Low[-4]>=Low[-5] and abs(Close[-4]-Open[-4])<0.5*(Close[-5]-Open[-5])) and (High[-3]<=High[-5] and Low[-3]>=Low[-5] and abs(Close[-3]-Open[-3])<0.5*(Close[-5]-Open[-5])) and (High[-2]<=High[-5] and Low[-2]>=Low[-5] and abs(Close[-2]-Open[-2])<0.5*(Close[-5]-Open[-5])) and (Close[-1]>Open[-1] and Close[-1]>Close[-5])"
-  },
-  {
-    "name": "Abandoned Baby",
-    "formula": "abs(Close[-2]-Open[-2]) <= 0.1*(High[-2]-Low[-2]) and ((Close[-3]<Open[-3] and Close[-1]>Open[-1] and Close[-1]>High[-2] and Open[-1]>High[-2]) or (Close[-3]>Open[-3] and Close[-1]<Open[-1] and Close[-1]<Low[-2] and Open[-1]<Low[-2]))"
-  },
-  {
-    "name": "Three Inside Up",
-    "formula": "Close[-3]<Open[-3] and Close[-2]>Open[-2] and Open[-2]>=Close[-3] and Close[-2]<=Open[-3] and Close[-1]>Open[-1] and Close[-1]>Open[-3]"
-  },
-  {
-    "name": "Three Inside Down",
-    "formula": "Close[-3]>Open[-3] and Close[-2]<Open[-2] and Open[-2]<=Close[-3] and Close[-2]>=Open[-3] and Close[-1]<Open[-1] and Close[-1]<Open[-3]"
-  },
-  {
-    "name": "Bullish Tasuki Gap",
-    "formula": "Close[-3]>Open[-3] and Close[-2]<Open[-2] and Open[-2]>=Open[-3] and Open[-2]<=Close[-3] and Close[-2]>Open[-3] and Close[-1]>Open[-1] and Close[-1]>Close[-3]"
-  },
-  {
-    "name": "Bearish Tasuki Gap",
-    "formula": "Close[-3]<Open[-3] and Close[-2]>Open[-2] and Open[-2]<=Open[-3] and Open[-2]>=Close[-3] and Close[-2]<Open[-3] and Close[-1]<Open[-1] and Close[-1]<Close[-3]"
-  },
-  {
-    "name": "Mat Hold",
-    "formula": "(Close[-5]>Open[-5] and (Close[-5]-Open[-5])>0.6*(High[-5]-Low[-5])) and (abs(Close[-4]-Open[-4])<0.5*(Close[-5]-Open[-5])) and (abs(Close[-3]-Open[-3])<0.5*(Close[-5]-Open[-5])) and (abs(Close[-2]-Open[-2])<0.5*(Close[-5]-Open[-5])) and (Close[-1]>Open[-1] and Close[-1]>Close[-5])"
-  },
-  {
-    "name": "Kicking",
-    "formula": "abs(Close[-2]-Open[-2])>0 and (High[-2]-max(Open[-2],Close[-2])<=0.05*abs(Close[-2]-Open[-2])) and (min(Open[-2],Close[-2])-Low[-2]<=0.05*abs(Close[-2]-Open[-2])) and abs(Close[-1]-Open[-1])>0 and (High[-1]-max(Open[-1],Close[-1])<=0.05*abs(Close[-1]-Open[-1])) and (min(Open[-1],Close[-1])-Low[-1]<=0.05*abs(Close[-1]-Open[-1])) and ((Close[-2]>Open[-2] and Close[-1]<Open[-1]) or (Close[-2]<Open[-2] and Close[-1]>Open[-1])) and ((Close[-2]<Open[-2] and Open[-1]>High[-2]) or (Close[-2]>Open[-2] and Open[-1]<Low[-2]))"
-  },
-  {
-    "name": "Three White Soldiers",
-    "formula": "(Close[-3]>Open[-3] and (Close[-3]-Open[-3])>0.6*(High[-3]-Low[-3])) and (Close[-2]>Open[-2] and (Close[-2]-Open[-2])>0.6*(High[-2]-Low[-2]) and Open[-2]>=Open[-3] and Open[-2]<=Close[-3] and Close[-2]>Close[-3]) and (Close[-1]>Open[-1] and (Close[-1]-Open[-1])>0.6*(High[-1]-Low[-1]) and Open[-1]>=Open[-2] and Open[-1]<=Close[-2] and Close[-1]>Close[-2])"
-  },
-  {
-    "name": "Three Black Crows",
-    "formula": "(Close[-3]<Open[-3] and (Open[-3]-Close[-3])>0.6*(High[-3]-Low[-3])) and (Close[-2]<Open[-2] and (Open[-2]-Close[-2])>0.6*(High[-2]-Low[-2]) and Open[-2]<=Open[-3] and Open[-2]>=Close[-3] and Close[-2]<Close[-3]) and (Close[-1]<Open[-1] and (Open[-1]-Close[-1])>0.6*(High[-1]-Low[-1]) and Open[-1]<=Open[-2] and Open[-1]>=Close[-2] and Close[-1]<Close[-2])"
-  },
-  {
-    "name": "Rising Window",
-    "formula": "Close[-2]>Open[-2] and Close[-1]>Open[-1] and Low[-1]>High[-2]"
-  },
-  {
-    "name": "Falling Window",
-    "formula": "Close[-2]<Open[-2] and Close[-1]<Open[-1] and High[-1]<Low[-2]"
-  },
-  {
-    "name": "Bullish Separating Lines",
-    "formula": "Close[-2]>Open[-2] and Close[-1]>Open[-1] and abs(Open[-1]-Open[-2])<=0.05*(High[-2]-Low[-2]) and Close[-1]>Close[-2]"
-  },
-  {
-    "name": "Bearish Separating Lines",
-    "formula": "Close[-2]<Open[-2] and Close[-1]<Open[-1] and abs(Open[-1]-Open[-2])<=0.05*(High[-2]-Low[-2]) and Close[-1]<Close[-2]"
-  },
-  {
-    "name": "Upside Gap Two Crows",
-    "formula": "Close[-3]>Open[-3] and Close[-2]<Open[-2] and Open[-2]>Close[-3] and Close[-2]>Close[-3] and Close[-1]<Open[-1] and Open[-1]>Open[-2] and Close[-1]<Close[-2] and Close[-1]>Close[-3]"
-  },
-  {
-    "name": "On Neck",
-    "formula": "Close[-2]<Open[-2] and Close[-1]>Open[-1] and Open[-1]<Close[-2] and abs(Close[-1]-Close[-2])<=0.1*(High[-2]-Low[-2])"
-  },
-  {
-    "name": "In Neck",
-    "formula": "Close[-2]<Open[-2] and Close[-1]>Open[-1] and Open[-1]<Close[-2] and Close[-1]>Close[-2] and Close[-1]<Open[-2]"
-  },
-  {
-    "name": "Thrusting",
-    "formula": "Close[-2]<Open[-2] and Close[-1]>Open[-1] and Open[-1]<Close[-2] and Close[-1]>((Open[-2]+Close[-2])/2) and Close[-1]<Open[-2]"
-  },
-  {
-    "name": "Deliberation",
-    "formula": "Close[-3]>Open[-3] and (Close[-3]-Open[-3])*0.6<(Close[-2]-Open[-2]) and Close[-1]>Open[-1] and Close[-1]>Close[-2] and Close[-1]-Open[-1]<0.5*(Close[-2]-Open[-2]) and abs(Close[-1]-Close[-2])<=0.1*(High[-2]-Low[-2])"
-  }
-]
+{  
+  "triggers": [
+    {
+      "name": "Default",
+      "formula": "((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))"
+    },
+    {
+      "name": "Bullish Marubozu",
+      "formula": "(Close[-2] > Open[-2]) and (High[-2] - Close[-2] <= 0.05*(Close[-2]-Open[-2])) and (Open[-2] - Low[-2] <= 0.05*(Close[-2]-Open[-2])) and (Close[-1] > Open[-1]) and (Close[-1] > High[-2])"
+    },
+    {
+      "name": "Bearish Marubozu",
+      "formula": "(Open[-2] > Close[-2]) and (High[-2] - Open[-2] <= 0.05*(Open[-2]-Close[-2])) and (Close[-2] - Low[-2] <= 0.05*(Open[-2]-Close[-2])) and (Close[-1] < Open[-1]) and (Close[-1] < Low[-2])"
+    },
+    {
+      "name": "Doji",
+      "formula": "abs(Close - Open) <= 0.2*(High - Low)"
+    },
+    {
+      "name": "Hammer",
+      "formula": "(min(Open[-2], Close[-2]) - Low[-2] >= 1.5*abs(Close[-2]-Open[-2])) and (High[-2]-max(Open[-2],Close[-2]) <= 1.5*abs(Close[-2]-Open[-2])) and (Close[-1]>Open[-1]) and (Close[-1]>High[-2])"
+    },
+    {
+      "name": "Inverted Hammer",
+      "formula": "(High[-2]-max(Open[-2],Close[-2]) >= 1.5*abs(Close[-2]-Open[-2])) and (min(Open[-2], Close[-2])-Low[-2] <= 1.5*abs(Close[-2]-Open[-2])) and (Close[-1]>Open[-1]) and (Close[-1]>High[-2])"
+    },
+    {
+      "name": "Bullish Engulfing",
+      "formula": "(Close[-3] < Open[-3]) and (Close[-2] > Open[-2]) and (Open[-2] <= Close[-3]) and (Close[-2] >= Open[-3]) and (Close[-1] > Open[-1]) and (Close[-1] > High[-2])"
+    },
+    {
+      "name": "Bearish Engulfing",
+      "formula": "(Close[-3] > Open[-3]) and (Close[-2] < Open[-2]) and (Open[-2] >= Close[-3]) and (Close[-2] <= Open[-3]) and (Close[-1] < Open[-1]) and (Close[-1] < Low[-2])"
+    },
+    {
+      "name": "Morning Star",
+      "formula": "(Close[-4] < Open[-4]) and (abs(Close[-3]-Open[-3]) < 0.5*abs(Open[-4]-Close[-4])) and (Close[-3] < Close[-4]) and (Close[-2] > Open[-2]) and (Close[-2] > (Open[-4]+Close[-4])/2) and (Close[-1] > Open[-1]) and (Close[-1] > High[-2])"
+    },
+    {
+      "name": "Evening Star",
+      "formula": "(Close[-4] > Open[-4]) and (abs(Close[-3]-Open[-3]) < 0.5*abs(Close[-4]-Open[-4])) and (Close[-3] > Close[-4]) and (Close[-2] < Open[-2]) and (Close[-2] < (Open[-4]+Close[-4])/2) and (Close[-1] < Open[-1]) and (Close[-1] < Low[-2])"
+    },
+    {
+      "name": "Piercing Line",
+      "formula": "(Close[-3] < Open[-3]) and (Open[-2] < Close[-3]) and (Close[-2] > (Open[-3]+Close[-3])/2) and (Close[-2] < Open[-3]) and (Close[-1] > Open[-1]) and (Close[-1] > High[-2])"
+    },
+    {
+      "name": "Dark Cloud Cover",
+      "formula": "(Close[-3] > Open[-3]) and (Open[-2] > Close[-3]) and (Close[-2] < (Open[-3]+Close[-3])/2) and (Close[-2] > Open[-3]) and (Close[-1] < Open[-1]) and (Close[-1] < Low[-2])"
+    },
+    {
+      "name": "Spinning Top",
+      "formula": "(abs(Close-Open) <= 0.4*(High-Low)) and ((High-max(Open,Close)) >= 0.5*abs(Close-Open)) and ((min(Open,Close)-Low) >= 0.5*abs(Close-Open))"
+    },
+    {
+      "name": "Rising Three Methods",
+      "formula": "(Close[-5]>Open[-5] and (Close[-5]-Open[-5])>0.6*(High[-5]-Low[-5])) and (High[-4]<=High[-5] and Low[-4]>=Low[-5] and abs(Close[-4]-Open[-4])<0.5*(Close[-5]-Open[-5])) and (High[-3]<=High[-5] and Low[-3]>=Low[-5] and abs(Close[-3]-Open[-3])<0.5*(Close[-5]-Open[-5])) and (High[-2]<=High[-5] and Low[-2]>=Low[-5] and abs(Close[-2]-Open[-2])<0.5*(Close[-5]-Open[-5])) and (Close[-1]>Open[-1] and Close[-1]>Close[-5])"
+    },
+    {
+      "name": "Abandoned Baby",
+      "formula": "abs(Close[-2]-Open[-2]) <= 0.1*(High[-2]-Low[-2]) and ((Close[-3]<Open[-3] and Close[-1]>Open[-1] and Close[-1]>High[-2] and Open[-1]>High[-2]) or (Close[-3]>Open[-3] and Close[-1]<Open[-1] and Close[-1]<Low[-2] and Open[-1]<Low[-2]))"
+    },
+    {
+      "name": "Three Inside Up",
+      "formula": "Close[-3]<Open[-3] and Close[-2]>Open[-2] and Open[-2]>=Close[-3] and Close[-2]<=Open[-3] and Close[-1]>Open[-1] and Close[-1]>Open[-3]"
+    },
+    {
+      "name": "Three Inside Down",
+      "formula": "Close[-3]>Open[-3] and Close[-2]<Open[-2] and Open[-2]<=Close[-3] and Close[-2]>=Open[-3] and Close[-1]<Open[-1] and Close[-1]<Open[-3]"
+    },
+    {
+      "name": "Bullish Tasuki Gap",
+      "formula": "Close[-3]>Open[-3] and Close[-2]<Open[-2] and Open[-2]>=Open[-3] and Open[-2]<=Close[-3] and Close[-2]>Open[-3] and Close[-1]>Open[-1] and Close[-1]>Close[-3]"
+    },
+    {
+      "name": "Bearish Tasuki Gap",
+      "formula": "Close[-3]<Open[-3] and Close[-2]>Open[-2] and Open[-2]<=Open[-3] and Open[-2]>=Close[-3] and Close[-2]<Open[-3] and Close[-1]<Open[-1] and Close[-1]<Close[-3]"
+    },
+    {
+      "name": "Mat Hold",
+      "formula": "(Close[-5]>Open[-5] and (Close[-5]-Open[-5])>0.6*(High[-5]-Low[-5])) and (abs(Close[-4]-Open[-4])<0.5*(Close[-5]-Open[-5])) and (abs(Close[-3]-Open[-3])<0.5*(Close[-5]-Open[-5])) and (abs(Close[-2]-Open[-2])<0.5*(Close[-5]-Open[-5])) and (Close[-1]>Open[-1] and Close[-1]>Close[-5])"
+    },
+    {
+      "name": "Kicking",
+      "formula": "abs(Close[-2]-Open[-2])>0 and (High[-2]-max(Open[-2],Close[-2])<=0.05*abs(Close[-2]-Open[-2])) and (min(Open[-2],Close[-2])-Low[-2]<=0.05*abs(Close[-2]-Open[-2])) and abs(Close[-1]-Open[-1])>0 and (High[-1]-max(Open[-1],Close[-1])<=0.05*abs(Close[-1]-Open[-1])) and (min(Open[-1],Close[-1])-Low[-1]<=0.05*abs(Close[-1]-Open[-1])) and ((Close[-2]>Open[-2] and Close[-1]<Open[-1]) or (Close[-2]<Open[-2] and Close[-1]>Open[-1])) and ((Close[-2]<Open[-2] and Open[-1]>High[-2]) or (Close[-2]>Open[-2] and Open[-1]<Low[-2]))"
+    },
+    {
+      "name": "Three White Soldiers",
+      "formula": "(Close[-3]>Open[-3] and (Close[-3]-Open[-3])>0.6*(High[-3]-Low[-3])) and (Close[-2]>Open[-2] and (Close[-2]-Open[-2])>0.6*(High[-2]-Low[-2]) and Open[-2]>=Open[-3] and Open[-2]<=Close[-3] and Close[-2]>Close[-3]) and (Close[-1]>Open[-1] and (Close[-1]-Open[-1])>0.6*(High[-1]-Low[-1]) and Open[-1]>=Open[-2] and Open[-1]<=Close[-2] and Close[-1]>Close[-2])"
+    },
+    {
+      "name": "Three Black Crows",
+      "formula": "(Close[-3]<Open[-3] and (Open[-3]-Close[-3])>0.6*(High[-3]-Low[-3])) and (Close[-2]<Open[-2] and (Open[-2]-Close[-2])>0.6*(High[-2]-Low[-2]) and Open[-2]<=Open[-3] and Open[-2]>=Close[-3] and Close[-2]<Close[-3]) and (Close[-1]<Open[-1] and (Open[-1]-Close[-1])>0.6*(High[-1]-Low[-1]) and Open[-1]<=Open[-2] and Open[-1]>=Close[-2] and Close[-1]<Close[-2])"
+    },
+    {
+      "name": "Rising Window",
+      "formula": "Close[-2]>Open[-2] and Close[-1]>Open[-1] and Low[-1]>High[-2]"
+    },
+    {
+      "name": "Falling Window",
+      "formula": "Close[-2]<Open[-2] and Close[-1]<Open[-1] and High[-1]<Low[-2]"
+    },
+    {
+      "name": "Bullish Separating Lines",
+      "formula": "Close[-2]>Open[-2] and Close[-1]>Open[-1] and abs(Open[-1]-Open[-2])<=0.05*(High[-2]-Low[-2]) and Close[-1]>Close[-2]"
+    },
+    {
+      "name": "Bearish Separating Lines",
+      "formula": "Close[-2]<Open[-2] and Close[-1]<Open[-1] and abs(Open[-1]-Open[-2])<=0.05*(High[-2]-Low[-2]) and Close[-1]<Close[-2]"
+    },
+    {
+      "name": "Upside Gap Two Crows",
+      "formula": "Close[-3]>Open[-3] and Close[-2]<Open[-2] and Open[-2]>Close[-3] and Close[-2]>Close[-3] and Close[-1]<Open[-1] and Open[-1]>Open[-2] and Close[-1]<Close[-2] and Close[-1]>Close[-3]"
+    },
+    {
+      "name": "On Neck",
+      "formula": "Close[-2]<Open[-2] and Close[-1]>Open[-1] and Open[-1]<Close[-2] and abs(Close[-1]-Close[-2])<=0.1*(High[-2]-Low[-2])"
+    },
+    {
+      "name": "In Neck",
+      "formula": "Close[-2]<Open[-2] and Close[-1]>Open[-1] and Open[-1]<Close[-2] and Close[-1]>Close[-2] and Close[-1]<Open[-2]"
+    },
+    {
+      "name": "Thrusting",
+      "formula": "Close[-2]<Open[-2] and Close[-1]>Open[-1] and Open[-1]<Close[-2] and Close[-1]>((Open[-2]+Close[-2])/2) and Close[-1]<Open[-2]"
+    },
+    {
+      "name": "Deliberation",
+      "formula": "Close[-3]>Open[-3] and (Close[-3]-Open[-3])*0.6<(Close[-2]-Open[-2]) and Close[-1]>Open[-1] and Close[-1]>Close[-2] and Close[-1]-Open[-1]<0.5*(Close[-2]-Open[-2]) and abs(Close[-1]-Close[-2])<=0.1*(High[-2]-Low[-2])"
+    }
+  ]
+}
