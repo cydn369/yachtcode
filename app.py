@@ -66,7 +66,7 @@ with trigger_col:
 with input_col:
     # Load formulas from JSON
     try:
-        with open("trigger.json", "r") as f:
+        with open("triggers.json", "r") as f:
             trigger_formulas = json.load(f)
     except FileNotFoundError:
         trigger_formulas = {
@@ -319,4 +319,5 @@ for i in range(0, len(results), cards_per_row):
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
+
 
