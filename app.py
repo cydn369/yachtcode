@@ -7,9 +7,7 @@ from datetime import datetime, timedelta
 import requests
 import json
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import time
+from email.mime.text import MIMEText, MIMEMultipart
 import ast
 import operator as op
 
@@ -45,22 +43,39 @@ except FileNotFoundError:
 # =========================
 source_option = st.radio(
     "Select Ticker Source:",
-    ["Nifty50", "Nifty500", "Forex Pairs"]
+    ["Nifty50", "Nifty500", "Forex Pairs", "Upload File"]
 )
 
 tickers = []
-file_map = {
-    "Nifty50": "Nifty50.txt",
-    "Nifty500": "Nifty500.txt",
-    "Forex Pairs": "Forex_Pairs.txt"
-}
 
-try:
-    with open(file_map[source_option], "r") as f:
-        content = f.read()
-    tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
-except FileNotFoundError:
-    st.error(f"{file_map[source_option]} not found")
+if source_option in ["Nifty50", "Nifty500", "Forex Pairs"]:
+    file_map = {
+        "Nifty50": "Nifty50.txt",
+        "Nifty500": "Nifty500.txt",
+        "Forex Pairs": "Forex_Pairs.txt"
+    }
+    try:
+        with open(file_map[source_option], "r") as f:
+            content = f.read()
+        tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
+    except FileNotFoundError:
+        st.error(f"{file_map[source_option]} not found")
+        st.stop()
+elif source_option == "Upload File":
+    uploaded_file = st.file_uploader(
+        "Upload your tickers file (TXT or CSV)",
+        type=["txt", "csv"],
+        help="Each ticker separated by comma or newline"
+    )
+    if uploaded_file:
+        content = uploaded_file.read().decode("utf-8")
+        tickers = [t.strip().upper() for t in content.replace("\n", ",").split(",") if t.strip()]
+    else:
+        st.warning("Please upload a file to proceed")
+        st.stop()
+
+if not tickers:
+    st.error("No tickers found")
     st.stop()
 
 # =========================
@@ -157,26 +172,29 @@ if st.sidebar.button("Test Alerts"):
     st.sidebar.success("Test alerts sent!")
 
 # =========================
-# Fetch Data
+# Fetch last 10 candles
 # =========================
 @st.cache_data(ttl=10)
-def fetch_data(tickers, timeframe):
-    period_map = {"1m": "1d", "5m": "5d", "15m": "15d", "1h": "60d"}
+def fetch_last_10_candles(ticker, timeframe):
+    period_map = {"1m": "2d", "5m": "2d", "15m": "3d", "1h": "5d"}
+    period = period_map.get(timeframe, "5d")
     df = yf.download(
-        tickers=tickers,
-        period=period_map[timeframe],
+        tickers=ticker,
+        period=period,
         interval=timeframe,
-        group_by="ticker",
-        progress=False,
-        threads=True
+        progress=False
     )
-    if not isinstance(df.columns, pd.MultiIndex):
-        df = pd.concat({tickers[0]: df}, axis=1)
-    return df
+    if df.empty:
+        return df
+    return df.tail(10)
 
-raw = fetch_data(tickers, timeframe)
+raw = {}
+for ticker in tickers:
+    df = fetch_last_10_candles(ticker, timeframe)
+    if not df.empty:
+        raw[ticker] = df
 
-if raw.empty:
+if not raw:
     st.warning("No data received from Yahoo Finance.")
     st.stop()
 
@@ -230,9 +248,8 @@ def check_trigger(df, condition):
 # Process tickers and trigger
 # =========================
 results = []
-for ticker in tickers:
-    if ticker not in raw: continue
-    df = raw[ticker].dropna().tail(10)
+for ticker, df in raw.items():
+    df = df.dropna()
     if df.empty: continue
     triggered = check_trigger(df, trigger_text)
     results.append((ticker, df, triggered))
@@ -292,6 +309,7 @@ for i in range(0, len(results), cards_per_row):
                 unsafe_allow_html=True
             )
 
+            # Plotly candlestick (no gaps, exact order)
             fig = go.Figure(
                 data=[go.Candlestick(
                     x=df.index,
