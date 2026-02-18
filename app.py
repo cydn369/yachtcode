@@ -120,7 +120,7 @@ timeframe = st.sidebar.selectbox(
     index=2
 )
 
-alerts_active = st.sidebar.checkbox("Activate Alerts", value=True)
+alerts_active = st.sidebar.checkbox("Activate Alerts", value=False)
 
 if alerts_active:
     st.sidebar.success("Alerts ACTIVE")
@@ -384,3 +384,4 @@ for i in range(0, len(results), cards_per_row):
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
+
