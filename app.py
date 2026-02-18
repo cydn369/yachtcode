@@ -65,6 +65,38 @@ alerts_active = st.sidebar.checkbox(
 )
 
 # =========================
+# CANDLE-ALIGNED COUNTDOWN (BEFORE ANY LAYOUT)
+# =========================
+def seconds_until_next_candle(timeframe):
+    now = datetime.now()
+    if timeframe == "1m":
+        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
+    elif timeframe == "5m":
+        minutes_to_add = 5 - (now.minute % 5)
+        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=minutes_to_add)
+    elif timeframe == "15m":
+        minutes_to_add = 15 - (now.minute % 15)
+        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=minutes_to_add)
+    elif timeframe == "1h":
+        next_candle = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    refresh_time = next_candle - timedelta(seconds=30)
+    sleep_seconds = (refresh_time - now).total_seconds()
+    if sleep_seconds < 1:
+        sleep_seconds = 5
+    return sleep_seconds
+
+sleep_seconds = seconds_until_next_candle(timeframe)
+countdown_placeholder = st.empty()
+
+# Short sleep chunks with countdown
+while sleep_seconds > 0:
+    countdown_placeholder.caption(
+        f"Next refresh in {int(sleep_seconds)} seconds (30s before candle)"
+    )
+    time.sleep(min(1, sleep_seconds))
+    sleep_seconds -= 1
+
+# =========================
 # LOAD TICKERS
 # =========================
 tickers = []
@@ -85,7 +117,6 @@ if source_option in ["Nifty50", "Nifty500", "Forex Pairs"]:
 
 elif source_option == "Upload File":
     uploaded_file = st.file_uploader("Upload tickers (txt/csv)", type=["txt", "csv"])
-
     if uploaded_file:
         content = uploaded_file.read().decode("utf-8")
         st.session_state.uploaded_tickers = [
@@ -93,7 +124,6 @@ elif source_option == "Upload File":
             for t in content.replace("\n", ",").split(",")
             if t.strip()
         ]
-
     if "uploaded_tickers" in st.session_state:
         tickers = st.session_state.uploaded_tickers
     else:
@@ -222,14 +252,12 @@ st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
 # ALERTS (NO DUPLICATES)
 # =========================
 if alerts_active and triggered_tickers:
-
     new_triggers = [
         t for t in triggered_tickers
         if t not in st.session_state.alerted_tickers
     ]
 
     if new_triggers:
-
         message_body = (
             f"{trigger_text}\n"
             f"Triggered Tickers: {', '.join(new_triggers)}"
@@ -314,43 +342,6 @@ for i in range(0, len(results), cards_per_row):
             st.plotly_chart(fig, use_container_width=True)
 
 # =========================
-# CANDLE-ALIGNED AUTO REFRESH
+# RERUN AT NEXT CANDLE (HANDLED ABOVE WITH SHORT CHUNKS)
 # =========================
-
-def seconds_until_next_candle(timeframe):
-    now = datetime.now()
-
-    if timeframe == "1m":
-        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
-
-    elif timeframe == "5m":
-        minutes_to_add = 5 - (now.minute % 5)
-        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=minutes_to_add)
-
-    elif timeframe == "15m":
-        minutes_to_add = 15 - (now.minute % 15)
-        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=minutes_to_add)
-
-    elif timeframe == "1h":
-        next_candle = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-
-    # Align 30 seconds BEFORE candle
-    refresh_time = next_candle - timedelta(seconds=30)
-
-    sleep_seconds = (refresh_time - now).total_seconds()
-
-    # Safety: if negative (rare edge case), fallback to small delay
-    if sleep_seconds < 1:
-        sleep_seconds = 5
-
-    return sleep_seconds
-
-
-sleep_seconds = seconds_until_next_candle(timeframe)
-
-st.caption(f"Next refresh in {int(sleep_seconds)} seconds (30s before candle)")
-
-time.sleep(sleep_seconds)
-st.rerun()
-
-
+# No extra code needed here; the short sleep loop at the top handles countdown and rerun
