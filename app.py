@@ -70,12 +70,17 @@ except FileNotFoundError:
 # =========================
 # Trigger Input (Combo Box)
 # =========================
-trigger_condition = st.selectbox(
-    "Select or enter Trigger Condition:",
+trigger_choice = st.selectbox(
+    "Select Trigger Condition:",
     options=list(trigger_formulas.values()),
-    index=list(trigger_formulas.values()).index(default_formula),
-    editable=True
+    index=list(trigger_formulas.values()).index(default_formula)
 )
+
+# Allow typing a custom formula
+custom_trigger = st.text_input("Or enter a custom trigger condition:", value=trigger_choice)
+
+# Use this in your alert checks
+trigger_condition = custom_trigger
 
 # =========================
 # Sidebar Controls
@@ -332,3 +337,4 @@ for i in range(0, len(results), cards_per_row):
             fig.update_xaxes(showgrid=False)
             fig.update_yaxes(showgrid=False)
             st.plotly_chart(fig, use_container_width=True)
+
