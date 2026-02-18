@@ -85,7 +85,7 @@ if not tickers:
 timeframe = st.sidebar.selectbox(
     "Timeframe",
     ["1m", "5m", "15m", "1h"],
-    index=1
+    index=2
 )
 
 # =========================
@@ -331,4 +331,5 @@ for i in range(0, len(results), cards_per_row):
             fig.update_xaxes(showgrid=False, zeroline=False)
             fig.update_yaxes(showgrid=False, zeroline=False)
             st.plotly_chart(fig, use_container_width=True)
+
 
