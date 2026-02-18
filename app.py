@@ -10,6 +10,7 @@ import smtplib
 import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import json
 
 st.set_page_config(layout="wide")
 
@@ -57,14 +58,34 @@ elif source_option == "Upload ticker file":
         st.stop()
 
 # =========================
-# Trigger Input
+# Trigger Input with Combo Box (from trigger.json)
 # =========================
 trigger_col, input_col = st.columns([1, 2])
 with trigger_col:
     st.markdown("**Trigger:**")
 with input_col:
-    default_condition = "((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))"
-    trigger_condition = st.text_input("", value=default_condition)
+    # Load formulas from JSON
+    try:
+        with open("trigger.json", "r") as f:
+            trigger_formulas = json.load(f)
+    except FileNotFoundError:
+        trigger_formulas = {
+            "Default": "((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))"
+        }
+
+    # Combo box to select a formula
+    selected_formula = st.selectbox(
+        "Select formula or type new:",
+        options=list(trigger_formulas.keys()),
+        index=0
+    )
+
+    # Text box to display/override the formula
+    trigger_condition = st.text_input(
+        "",
+        value=trigger_formulas[selected_formula]
+    )
+
 
 # =========================
 # Sidebar Controls
@@ -298,3 +319,4 @@ for i in range(0, len(results), cards_per_row):
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
+
