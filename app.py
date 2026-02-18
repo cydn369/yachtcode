@@ -19,13 +19,10 @@ st.set_page_config(layout="wide")
 # =========================
 if "timeframe" not in st.session_state:
     st.session_state.timeframe = "15m"
-
 if "source_option" not in st.session_state:
     st.session_state.source_option = "Nifty50"
-
 if "alerts_active" not in st.session_state:
     st.session_state.alerts_active = False
-
 if "alerted_tickers" not in st.session_state:
     st.session_state.alerted_tickers = set()
 
@@ -68,28 +65,6 @@ alerts_active = st.sidebar.checkbox(
 )
 
 # =========================
-# AUTO-REFRESH USING st_autorefresh
-# =========================
-interval_map = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600}
-
-# Calculate approximate refresh 30s before next candle
-def get_autorefresh_interval(timeframe):
-    now = datetime.now()
-    if timeframe == "1m":
-        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
-    elif timeframe == "5m":
-        next_candle = now.replace(minute=(now.minute//5)*5, second=0, microsecond=0) + timedelta(minutes=5)
-    elif timeframe == "15m":
-        next_candle = now.replace(minute=(now.minute//15)*15, second=0, microsecond=0) + timedelta(minutes=15)
-    elif timeframe == "1h":
-        next_candle = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    refresh_time = next_candle - timedelta(seconds=30)
-    interval = max((refresh_time - now).total_seconds(), 5)
-    return int(interval*1000)  # milliseconds for st_autorefresh
-
-st_autorefresh(interval=get_autorefresh_interval(timeframe), key="auto_refresh")
-
-# =========================
 # STATIC COUNTDOWN CAPTION
 # =========================
 def seconds_until_next_candle(timeframe):
@@ -106,6 +81,14 @@ def seconds_until_next_candle(timeframe):
     return max(int((refresh_time - now).total_seconds()), 0)
 
 st.caption(f"Next refresh in ~{seconds_until_next_candle(timeframe)} seconds (30s before candle)")
+
+# =========================
+# AUTO-REFRESH USING st_autorefresh
+# =========================
+def get_autorefresh_interval(timeframe):
+    return seconds_until_next_candle(timeframe) * 1000  # ms for st_autorefresh
+
+st_autorefresh(interval=get_autorefresh_interval(timeframe), key="auto_refresh")
 
 # =========================
 # LOAD TICKERS
@@ -186,7 +169,7 @@ if raw.empty:
     st.stop()
 
 # =========================
-# SAFE TRIGGER EVALUATOR
+# SAFE TRIGGER EVALUATOR (FULL ORIGINAL)
 # =========================
 operators = {
     ast.Gt: op.gt, ast.Lt: op.lt, ast.GtE: op.ge, ast.LtE: op.le,
@@ -195,6 +178,7 @@ operators = {
     ast.And: lambda a,b: a and b,
     ast.Or: lambda a,b: a or b
 }
+
 allowed_functions = {"abs": abs, "max": max, "min": min}
 
 def check_trigger(df, condition):
@@ -208,21 +192,30 @@ def check_trigger(df, condition):
             for v in node.values[1:]:
                 result = operators[type(node.op)](result, _eval(v))
             return result
+        elif isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.USub): return -_eval(node.operand)
+            if isinstance(node.op, ast.Not): return not _eval(node.operand)
         elif isinstance(node, ast.Compare):
             return operators[type(node.ops[0])](_eval(node.left), _eval(node.comparators[0]))
         elif isinstance(node, ast.BinOp):
             return operators[type(node.op)](_eval(node.left), _eval(node.right))
-        elif isinstance(node, ast.Name): return get_value(node.id)
+        elif isinstance(node, ast.Subscript):
+            field = node.value.id
+            index = node.slice.value if isinstance(node.slice, ast.Constant) else _eval(node.slice)
+            return get_value(field, index)
+        elif isinstance(node, ast.Call):
+            func_name = node.func.id
+            if func_name not in allowed_functions: raise ValueError("Function not allowed")
+            return allowed_functions[func_name](*[_eval(arg) for arg in node.args])
+        elif isinstance(node, ast.Name): return get_value(node.id, -1)
         elif isinstance(node, ast.Constant): return node.value
-        else: return False
-    try:
-        parsed = ast.parse(condition, mode="eval")
-        return bool(_eval(parsed))
-    except:
-        return False
+        else: raise TypeError(node)
+    parsed = ast.parse(condition, mode="eval")
+    try: return bool(_eval(parsed))
+    except: return False
 
 # =========================
-# PROCESS TICKERS
+# PROCESS TICKERS AND TRIGGER (SORT TRIGGERED FIRST)
 # =========================
 results = []
 for ticker in tickers:
@@ -307,4 +300,3 @@ for i in range(0, len(results), cards_per_row):
                 template="plotly_white"
             )
             st.plotly_chart(fig, use_container_width=True)
-
