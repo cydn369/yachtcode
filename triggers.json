@@ -1,0 +1,5 @@
+{
+  "Default": "((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))",
+  "BullishEngulfing": "Close > Open and Close[-1] < Open[-1]",
+  "HighVolatility": "abs(High-Low)/Open > 1.5"
+}
