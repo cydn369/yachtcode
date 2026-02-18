@@ -243,7 +243,8 @@ for i in range(0,len(results),cards_per_row):
         color = "#16a34a" if change>=0 else "#dc2626"
         with col:
             st.markdown(f"**{ticker}**")
-            if triggered: st.markdown(f"<span style='background-color:yellow'>TRIGGERED</span>", unsafe_allow_html=True)
+            if triggered:
+                st.warning("TRIGGERED")
             st.markdown(f"### {latest:.4f}")
             st.markdown(f"<span style='color:{color}; font-size:14px;'>{change:+.4f} ({pct:+.2f}%)</span>", unsafe_allow_html=True)
             fig = go.Figure(data=[go.Candlestick(
@@ -255,3 +256,4 @@ for i in range(0,len(results),cards_per_row):
             fig.update_xaxes(showgrid=False)
             fig.update_yaxes(showgrid=False)
             st.plotly_chart(fig, use_container_width=True)
+
