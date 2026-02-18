@@ -306,7 +306,7 @@ currently_triggered = {r[0] for r in results if r[2]}
 st.session_state.alerted_tickers.intersection_update(currently_triggered)
 
 # =========================
-# DISPLAY CARDS (Expandable Charts)
+# DISPLAY CARDS (Expandable Charts with Siren)
 # =========================
 cards_per_row = 4
 
@@ -321,11 +321,11 @@ for i in range(0, len(results), cards_per_row):
         pct = (change / prev) * 100
         color = "#16a34a" if change >= 0 else "#dc2626"
 
-        with col:
-            with st.expander(f"{ticker}", expanded=False):
+        # Add siren if triggered
+        display_name = f"🚨 {ticker}" if triggered else ticker
 
-                if triggered:
-                    st.warning("TRIGGERED")
+        with col:
+            with st.expander(display_name, expanded=False):
 
                 st.markdown(f"### {latest:.4f}")
                 st.markdown(
@@ -355,3 +355,4 @@ for i in range(0, len(results), cards_per_row):
                 )
 
                 st.plotly_chart(fig, use_container_width=True)
+
