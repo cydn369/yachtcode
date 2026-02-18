@@ -88,6 +88,15 @@ with input_col:
 
 
 # =========================
+# Sidebar Controls
+# =========================
+timeframe = st.sidebar.selectbox(
+    "Timeframe",
+    ["1m", "5m", "15m", "1h"],
+    index=1
+)
+
+# =========================
 # Last Updated / Next Update Display
 # =========================
 now = datetime.now()
@@ -105,14 +114,6 @@ interval_map = {
 next_update = now + interval_map[timeframe]
 st.caption(f"Next update (approx): {next_update.strftime('%Y-%m-%d %H:%M:%S')}")
 
-# =========================
-# Sidebar Controls
-# =========================
-timeframe = st.sidebar.selectbox(
-    "Timeframe",
-    ["1m", "5m", "15m", "1h"],
-    index=1
-)
 
 # =========================
 # Alerts Controls
@@ -337,6 +338,7 @@ for i in range(0, len(results), cards_per_row):
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
+
 
 
 
