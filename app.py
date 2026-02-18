@@ -7,8 +7,7 @@ from datetime import datetime, timedelta
 import requests
 import json
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText, MIMEMultipart
 import ast
 import operator as op
 
@@ -173,7 +172,7 @@ if st.sidebar.button("Test Alerts"):
     st.sidebar.success("Test alerts sent!")
 
 # =========================
-# Fetch last 10 candles
+# Fetch last 10 candles (single ticker at a time)
 # =========================
 @st.cache_data(ttl=10)
 def fetch_last_10_candles(ticker, timeframe):
@@ -187,6 +186,8 @@ def fetch_last_10_candles(ticker, timeframe):
     )
     if df.empty:
         return df
+    # Ensure the dataframe has all needed columns
+    df = df[["Open","High","Low","Close"]]
     return df.tail(10)
 
 raw = {}
@@ -209,7 +210,6 @@ operators = {
     ast.And: lambda a,b: a and b,
     ast.Or: lambda a,b: a or b
 }
-
 allowed_functions = {"abs": abs, "max": max, "min": min}
 
 def check_trigger(df, condition):
@@ -254,6 +254,9 @@ for ticker, df in raw.items():
     if df.empty: continue
     triggered = check_trigger(df, trigger_text)
     results.append((ticker, df, triggered))
+
+# Sort triggered tickers first
+results.sort(key=lambda x: not x[2])
 
 triggered_count = sum(1 for r in results if r[2])
 st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
@@ -332,5 +335,3 @@ for i in range(0, len(results), cards_per_row):
             fig.update_xaxes(showgrid=False, zeroline=False)
             fig.update_yaxes(showgrid=False, zeroline=False)
             st.plotly_chart(fig, use_container_width=True)
-
-
