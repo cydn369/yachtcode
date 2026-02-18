@@ -263,12 +263,12 @@ st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
 # =========================
 if alerts_active and triggered_count > 0:
     triggered_tickers = [r[0] for r in results if r[2]]
-    message_body = f"{trigger_text}\nTriggered Tickers: {', '.join(triggered_tickers)}"
+    message_body = f"{trigger_text}\n\nTriggered Tickers: {', '.join(triggered_tickers)}"
 
     # Telegram
     requests.post(
         f"https://api.telegram.org/bot{telegram_token}/sendMessage",
-        data={"chat_id": telegram_chat_id, "text": f"Here's the YachtCode {timeframe} Alert Brief\n{message_body}"}
+        data={"chat_id": telegram_chat_id, "text": f"Here's the YachtCode {timeframe} Alert Brief\n\n{message_body}"}
     )
 
     # Email
@@ -331,3 +331,4 @@ for i in range(0, len(results), cards_per_row):
             fig.update_xaxes(showgrid=False, zeroline=False)
             fig.update_yaxes(showgrid=False, zeroline=False)
             st.plotly_chart(fig, use_container_width=True)
+
