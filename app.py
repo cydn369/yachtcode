@@ -44,10 +44,13 @@ st.title("Yacht Code")
 # =========================
 # SIDEBAR CONTROLS
 # =========================
+if st.session_state.timeframe not in ["15m", "1d"]:
+    st.session_state.timeframe = "15m"
+
 timeframe = st.sidebar.selectbox(
     "Timeframe",
-    ["1m", "5m", "15m", "1h"],
-    index=["1m","5m","15m","1h"].index(st.session_state.timeframe),
+    ["15m", "1d"],
+    index=["15m", "1d"].index(st.session_state.timeframe),
     key="timeframe"
 )
 
@@ -65,28 +68,35 @@ alerts_active = st.sidebar.checkbox(
 )
 
 # =========================
-# STATIC COUNTDOWN CAPTION
+# CANDLE COUNTDOWN
 # =========================
 def seconds_until_next_candle(timeframe):
     now = datetime.now()
-    if timeframe == "1m":
-        next_candle = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
-    elif timeframe == "5m":
-        next_candle = now.replace(minute=(now.minute//5)*5, second=0, microsecond=0) + timedelta(minutes=5)
-    elif timeframe == "15m":
-        next_candle = now.replace(minute=(now.minute//15)*15, second=0, microsecond=0) + timedelta(minutes=15)
-    elif timeframe == "1h":
-        next_candle = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    refresh_time = next_candle - timedelta(seconds=30)
+
+    if timeframe == "15m":
+        next_candle = (
+            now.replace(
+                minute=(now.minute // 15) * 15,
+                second=0,
+                microsecond=0
+            )
+            + timedelta(minutes=15)
+        )
+        refresh_time = next_candle - timedelta(seconds=30)
+
+    elif timeframe == "1d":
+        next_candle = (now + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        refresh_time = next_candle - timedelta(seconds=30)
+
     return max(int((refresh_time - now).total_seconds()), 0)
 
 st.caption(f"Next refresh in ~{seconds_until_next_candle(timeframe)} seconds (30s before candle)")
 
-# =========================
-# AUTO-REFRESH USING st_autorefresh
-# =========================
 def get_autorefresh_interval(timeframe):
-    return seconds_until_next_candle(timeframe) * 1000  # ms for st_autorefresh
+    seconds = seconds_until_next_candle(timeframe)
+    return max(seconds, 5) * 1000  # safeguard
 
 st_autorefresh(interval=get_autorefresh_interval(timeframe), key="auto_refresh")
 
@@ -108,6 +118,7 @@ if source_option in ["Nifty50", "Nifty500", "Forex Pairs"]:
     except FileNotFoundError:
         st.error(f"{file_map[source_option]} not found")
         st.stop()
+
 elif source_option == "Upload File":
     uploaded_file = st.file_uploader("Upload tickers (txt/csv)", type=["txt", "csv"])
     if uploaded_file:
@@ -153,7 +164,7 @@ trigger_text = st.text_input(
 def fetch_data(tickers, timeframe):
     df = yf.download(
         tickers=tickers,
-        period="5d",
+        period="5d" if timeframe == "15m" else "6mo",
         interval=timeframe,
         group_by="ticker",
         progress=False,
@@ -169,7 +180,7 @@ if raw.empty:
     st.stop()
 
 # =========================
-# SAFE TRIGGER EVALUATOR (FULL ORIGINAL)
+# SAFE TRIGGER EVALUATOR
 # =========================
 operators = {
     ast.Gt: op.gt, ast.Lt: op.lt, ast.GtE: op.ge, ast.LtE: op.le,
@@ -182,50 +193,72 @@ operators = {
 allowed_functions = {"abs": abs, "max": max, "min": min}
 
 def check_trigger(df, condition):
-    if len(df) < 3: return False
+    if len(df) < 3:
+        return False
+
     def get_value(name, index=-1):
         return float(df.iloc[index][name])
+
     def _eval(node):
-        if isinstance(node, ast.Expression): return _eval(node.body)
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
         elif isinstance(node, ast.BoolOp):
             result = _eval(node.values[0])
             for v in node.values[1:]:
                 result = operators[type(node.op)](result, _eval(v))
             return result
         elif isinstance(node, ast.UnaryOp):
-            if isinstance(node.op, ast.USub): return -_eval(node.operand)
-            if isinstance(node.op, ast.Not): return not _eval(node.operand)
+            if isinstance(node.op, ast.USub):
+                return -_eval(node.operand)
+            if isinstance(node.op, ast.Not):
+                return not _eval(node.operand)
         elif isinstance(node, ast.Compare):
-            return operators[type(node.ops[0])](_eval(node.left), _eval(node.comparators[0]))
+            return operators[type(node.ops[0])](
+                _eval(node.left),
+                _eval(node.comparators[0])
+            )
         elif isinstance(node, ast.BinOp):
-            return operators[type(node.op)](_eval(node.left), _eval(node.right))
+            return operators[type(node.op)](
+                _eval(node.left),
+                _eval(node.right)
+            )
         elif isinstance(node, ast.Subscript):
             field = node.value.id
             index = node.slice.value if isinstance(node.slice, ast.Constant) else _eval(node.slice)
             return get_value(field, index)
         elif isinstance(node, ast.Call):
             func_name = node.func.id
-            if func_name not in allowed_functions: raise ValueError("Function not allowed")
+            if func_name not in allowed_functions:
+                raise ValueError("Function not allowed")
             return allowed_functions[func_name](*[_eval(arg) for arg in node.args])
-        elif isinstance(node, ast.Name): return get_value(node.id, -1)
-        elif isinstance(node, ast.Constant): return node.value
-        else: raise TypeError(node)
+        elif isinstance(node, ast.Name):
+            if node.id not in df.columns:
+                raise ValueError(f"Invalid column: {node.id}")
+            return get_value(node.id, -1)
+        elif isinstance(node, ast.Constant):
+            return node.value
+        else:
+            raise TypeError(node)
+
     parsed = ast.parse(condition, mode="eval")
-    try: return bool(_eval(parsed))
-    except: return False
+    try:
+        return bool(_eval(parsed))
+    except:
+        return False
 
 # =========================
-# PROCESS TICKERS AND TRIGGER (SORT TRIGGERED FIRST)
+# PROCESS TICKERS
 # =========================
 results = []
 for ticker in tickers:
-    if ticker not in raw: continue
+    if ticker not in raw:
+        continue
     df = raw[ticker].dropna().tail(10)
-    if df.empty: continue
+    if df.empty:
+        continue
     triggered = check_trigger(df, trigger_text)
     results.append((ticker, df, triggered))
 
-# Sort triggered first
 results.sort(key=lambda x: not x[2])
 triggered_count = sum(1 for r in results if r[2])
 st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
@@ -235,21 +268,29 @@ st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
 # =========================
 if alerts_active and triggered_count > 0:
     triggered_tickers = [r[0] for r in results if r[2]]
-    new_triggers = [t for t in triggered_tickers if t not in st.session_state.alerted_tickers]
+    new_triggers = [
+        t for t in triggered_tickers
+        if t not in st.session_state.alerted_tickers
+    ]
+
     if new_triggers:
         message_body = f"{trigger_text}\nTriggered Tickers: {', '.join(new_triggers)}"
-        # Telegram
+
         requests.post(
             f"https://api.telegram.org/bot{telegram_token}/sendMessage",
-            data={"chat_id": telegram_chat_id, "text": f"YachtCode {timeframe} Alert\n{message_body}"}
+            data={
+                "chat_id": telegram_chat_id,
+                "text": f"YachtCode {timeframe} Alert\n{message_body}"
+            }
         )
-        # Email
+
         try:
             msg = MIMEMultipart()
             msg["From"] = gmail_user
             msg["To"] = ",".join(alert_emails)
             msg["Subject"] = f"YachtCode {timeframe} Alert"
             msg.attach(MIMEText(message_body, "plain"))
+
             server = smtplib.SMTP("smtp.gmail.com", 587)
             server.starttls()
             server.login(gmail_user, gmail_password)
@@ -257,46 +298,60 @@ if alerts_active and triggered_count > 0:
             server.quit()
         except Exception as e:
             st.sidebar.error(f"Email error: {e}")
+
         st.session_state.alerted_tickers.update(new_triggers)
 
+# allow retrigger
+currently_triggered = {r[0] for r in results if r[2]}
+st.session_state.alerted_tickers.intersection_update(currently_triggered)
+
 # =========================
-# DISPLAY CARDS
+# DISPLAY CARDS (Expandable Charts)
 # =========================
 cards_per_row = 4
+
 for i in range(0, len(results), cards_per_row):
     row = results[i:i+cards_per_row]
     cols = st.columns(cards_per_row)
+
     for col, (ticker, df, triggered) in zip(cols, row):
         latest = float(df["Close"].iloc[-1])
         prev = float(df["Close"].iloc[-2])
         change = latest - prev
         pct = (change / prev) * 100
         color = "#16a34a" if change >= 0 else "#dc2626"
+
         with col:
-            st.markdown(f"**{ticker}**")
-            if triggered: st.warning("TRIGGERED")
-            st.markdown(f"### {latest:.4f}")
-            st.markdown(
-                f"<span style='color:{color}; font-size:14px;'>"
-                f"{change:+.4f} ({pct:+.2f}%)</span>",
-                unsafe_allow_html=True
-            )
-            fig = go.Figure(
-                data=[go.Candlestick(
-                    x=df.index,
-                    open=df["Open"],
-                    high=df["High"],
-                    low=df["Low"],
-                    close=df["Close"],
-                    increasing_line_color="#16a34a",
-                    decreasing_line_color="#dc2626"
-                )]
-            )
-            fig.update_layout(
-                height=220,
-                margin=dict(l=5, r=5, t=5, b=5),
-                xaxis_rangeslider_visible=False,
-                showlegend=False,
-                template="plotly_white"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            with st.expander(f"{ticker}", expanded=False):
+
+                if triggered:
+                    st.warning("TRIGGERED")
+
+                st.markdown(f"### {latest:.4f}")
+                st.markdown(
+                    f"<span style='color:{color}; font-size:14px;'>"
+                    f"{change:+.4f} ({pct:+.2f}%)</span>",
+                    unsafe_allow_html=True
+                )
+
+                fig = go.Figure(
+                    data=[go.Candlestick(
+                        x=df.index,
+                        open=df["Open"],
+                        high=df["High"],
+                        low=df["Low"],
+                        close=df["Close"],
+                        increasing_line_color="#16a34a",
+                        decreasing_line_color="#dc2626"
+                    )]
+                )
+
+                fig.update_layout(
+                    height=220,
+                    margin=dict(l=5, r=5, t=5, b=5),
+                    xaxis_rangeslider_visible=False,
+                    showlegend=False,
+                    template="plotly_white"
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
