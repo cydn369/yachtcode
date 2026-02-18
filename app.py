@@ -104,13 +104,13 @@ elif source_option == "Upload ticker file":
 try:
     with open("triggers.json") as f:
         trigger_dict = json.load(f)
-#except FileNotFoundError:
-#    trigger_dict = {"Default": "((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))"}
+except FileNotFoundError:
+    trigger_dict = {"Default": "((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))"}
 
 # =========================
 # TRIGGER FORMULA COMBO BOX + EDITABLE
 # =========================
-trigger_name = st.selectbox("Select Trigger Preset", list(trigger_dict.keys()))
+trigger_name = st.selectbox("Select Trigger Preset", ["Default"] + [list(trigger_dict.keys()))
 if trigger_name in trigger_dict:
     default_formula = trigger_dict[trigger_name]
 trigger_condition = st.text_input("Trigger Condition", value=default_formula)
@@ -317,5 +317,6 @@ for i in range(0,len(results),cards_per_row):
             fig.update_xaxes(showgrid=False)
             fig.update_yaxes(showgrid=False)
             st.plotly_chart(fig, use_container_width=True)
+
 
 
