@@ -104,8 +104,8 @@ elif source_option == "Upload ticker file":
 try:
     with open("triggers.json") as f:
         trigger_dict = json.load(f)
-except FileNotFoundError:
-    trigger_dict = {"Default": "((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))"}
+#except FileNotFoundError:
+#    trigger_dict = {"Default": "((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))"}
 
 # =========================
 # TRIGGER FORMULA COMBO BOX + EDITABLE
@@ -143,7 +143,7 @@ st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 # =========================
 @st.cache_data(ttl=10)
 def fetch_data(tickers, timeframe):
-    period_map = {"1m": "1d", "5m": "2d", "15m": "5d", "1h": "15d"}
+    period_map = {"1m": "2d", "5m": "2d", "15m": "2d", "1h": "2d"}
     period = period_map[timeframe]
     return yf.download(
         tickers=tickers,
@@ -317,3 +317,4 @@ for i in range(0,len(results),cards_per_row):
             fig.update_xaxes(showgrid=False)
             fig.update_yaxes(showgrid=False)
             st.plotly_chart(fig, use_container_width=True)
+
