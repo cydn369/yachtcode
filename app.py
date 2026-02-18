@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 import ast
 import operator as op
@@ -86,6 +86,24 @@ with input_col:
         value=trigger_formulas[selected_formula]
     )
 
+
+# =========================
+# Last Updated / Next Update Display
+# =========================
+now = datetime.now()
+st.caption(f"Last updated: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+
+# Calculate next update based on selected timeframe
+interval_map = {
+    "1m": timedelta(minutes=1),
+    "5m": timedelta(minutes=5),
+    "15m": timedelta(minutes=15),
+    "1h": timedelta(hours=1),
+    "1d": timedelta(days=1)
+}
+
+next_update = now + interval_map[timeframe]
+st.caption(f"Next update (approx): {next_update.strftime('%Y-%m-%d %H:%M:%S')}")
 
 # =========================
 # Sidebar Controls
@@ -319,5 +337,6 @@ for i in range(0, len(results), cards_per_row):
             fig.update_yaxes(showgrid=False)
 
             st.plotly_chart(fig, use_container_width=True)
+
 
 
