@@ -350,6 +350,7 @@ with center_col:
         if selected:
             ticker, df, triggered = selected
 
+            st.subheader(f"{ticker}")
             fig = go.Figure(data=[go.Candlestick(
                 x=df.index,
                 open=df["Open"],
@@ -367,3 +368,4 @@ with center_col:
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Click a ticker on the right to load chart.")
+
