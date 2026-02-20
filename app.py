@@ -15,13 +15,14 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(layout="wide")
 
 # =========================
-# CSS FOR SCROLLABLE RESULTS
+# CSS FOR SCROLLABLE RIGHT COLUMN
 # =========================
 st.markdown(
     """
     <style>
-    .scrollable-results {
-        height: 600px;  /* adjust as needed */
+    /* Scrollable right column container */
+    [data-testid="stVerticalBlock"] > div:first-child > div:last-child > div:nth-child(3) > div {
+        height: 600px;  /* fixed height */
         overflow-y: auto;
         padding-right: 10px;
         border: 1px solid #eee;
@@ -336,12 +337,10 @@ currently_triggered = {r[0] for r in results if r[2]}
 st.session_state.alerted_tickers.intersection_update(currently_triggered)
 
 # =========================
-# RIGHT PANEL (RESULTS) - Scrollable
+# RIGHT PANEL (RESULTS) - Scrollable via CSS on container
 # =========================
 with right_col:
     st.header(f"Results ({triggered_count}/{len(results)})")
-
-    st.markdown('<div class="scrollable-results">', unsafe_allow_html=True)
 
     for ticker, df, triggered in results:
         latest = float(df["Close"].iloc[-1])
@@ -355,8 +354,6 @@ with right_col:
 
         st.caption(f"{latest:.2f} ({pct:+.2f}%)")
         st.divider()
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # CENTER PANEL (CHART & TICKER INFO)
