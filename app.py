@@ -25,6 +25,8 @@ if "alerts_active" not in st.session_state:
     st.session_state.alerts_active = False
 if "alerted_tickers" not in st.session_state:
     st.session_state.alerted_tickers = set()
+if "selected_ticker" not in st.session_state:
+    st.session_state.selected_ticker = None
 
 # =========================
 # LOAD SECRETS
@@ -36,36 +38,7 @@ alert_emails = st.secrets["alert_emails"]
 telegram_token = st.secrets["telegram_token"]
 telegram_chat_id = st.secrets["telegram_chat_id"]
 
-# =========================
-# TITLE
-# =========================
 st.title("Yacht Code")
-
-# =========================
-# SIDEBAR CONTROLS
-# =========================
-if st.session_state.timeframe not in ["15m", "1d"]:
-    st.session_state.timeframe = "15m"
-
-timeframe = st.sidebar.selectbox(
-    "Timeframe",
-    ["15m", "1d"],
-    index=["15m", "1d"].index(st.session_state.timeframe),
-    key="timeframe"
-)
-
-source_option = st.radio(
-    "Select Ticker Source:",
-    ["Nifty50", "Nifty500", "Forex Pairs", "Upload File"],
-    index=["Nifty50","Nifty500","Forex Pairs","Upload File"].index(st.session_state.source_option),
-    key="source_option"
-)
-
-alerts_active = st.sidebar.checkbox(
-    "Activate Alerts",
-    value=st.session_state.alerts_active,
-    key="alerts_active"
-)
 
 # =========================
 # CANDLE COUNTDOWN
@@ -92,47 +65,69 @@ def seconds_until_next_candle(timeframe):
 
     return max(int((refresh_time - now).total_seconds()), 0)
 
-st.caption(f"Next refresh in ~{seconds_until_next_candle(timeframe)} seconds (30s before candle)")
-
 def get_autorefresh_interval(timeframe):
     seconds = seconds_until_next_candle(timeframe)
-    return max(seconds, 5) * 1000  # safeguard
+    return max(seconds, 5) * 1000
 
-st_autorefresh(interval=get_autorefresh_interval(timeframe), key="auto_refresh")
+st.caption(f"Next refresh in ~{seconds_until_next_candle(st.session_state.timeframe)} seconds")
+st_autorefresh(interval=get_autorefresh_interval(st.session_state.timeframe), key="auto_refresh")
+
+# =========================
+# LAYOUT
+# =========================
+left_col, center_col, right_col = st.columns([1, 2, 1])
+
+# =========================
+# LEFT PANEL (CONTROLS)
+# =========================
+with left_col:
+    st.header("Controls")
+
+    timeframe = st.selectbox(
+        "Timeframe",
+        ["15m", "1d"],
+        key="timeframe"
+    )
+
+    source_option = st.radio(
+        "Select Ticker Source:",
+        ["Nifty50", "Nifty500", "Forex Pairs", "Upload File"],
+        key="source_option"
+    )
+
+    alerts_active = st.checkbox(
+        "Activate Alerts",
+        key="alerts_active"
+    )
 
 # =========================
 # LOAD TICKERS
 # =========================
 tickers = []
 
-if source_option in ["Nifty50", "Nifty500", "Forex Pairs"]:
+if st.session_state.source_option in ["Nifty50", "Nifty500", "Forex Pairs"]:
     file_map = {
         "Nifty50": "Nifty50.txt",
         "Nifty500": "Nifty500.txt",
         "Forex Pairs": "Forex_Pairs.txt"
     }
     try:
-        with open(file_map[source_option], "r") as f:
+        with open(file_map[st.session_state.source_option], "r") as f:
             content = f.read()
         tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
     except FileNotFoundError:
-        st.error(f"{file_map[source_option]} not found")
+        st.error("Ticker file not found")
         st.stop()
 
-elif source_option == "Upload File":
+elif st.session_state.source_option == "Upload File":
     uploaded_file = st.file_uploader("Upload tickers (txt/csv)", type=["txt", "csv"])
     if uploaded_file:
         content = uploaded_file.read().decode("utf-8")
-        st.session_state.uploaded_tickers = [
+        tickers = [
             t.strip().upper()
             for t in content.replace("\n", ",").split(",")
             if t.strip()
         ]
-    if "uploaded_tickers" in st.session_state:
-        tickers = st.session_state.uploaded_tickers
-    else:
-        st.warning("Please upload a file")
-        st.stop()
 
 if not tickers:
     st.stop()
@@ -140,19 +135,15 @@ if not tickers:
 # =========================
 # LOAD TRIGGERS
 # =========================
-try:
-    with open("triggers.json", "r") as f:
-        trigger_formulas = json.load(f)
-except FileNotFoundError:
-    st.error("triggers.json not found")
-    st.stop()
+with open("triggers.json", "r") as f:
+    trigger_formulas = json.load(f)
 
-trigger_condition = st.selectbox(
+trigger_condition = left_col.selectbox(
     "Trigger Condition:",
     options=list(trigger_formulas.keys())
 )
 
-trigger_text = st.text_input(
+trigger_text = left_col.text_input(
     "Custom / Edit Trigger:",
     value=trigger_formulas[trigger_condition]
 )
@@ -174,10 +165,7 @@ def fetch_data(tickers, timeframe):
         df = pd.concat({tickers[0]: df}, axis=1)
     return df
 
-raw = fetch_data(tickers, timeframe)
-if raw.empty:
-    st.warning("No data received.")
-    st.stop()
+raw = fetch_data(tickers, st.session_state.timeframe)
 
 # =========================
 # SAFE TRIGGER EVALUATOR
@@ -190,10 +178,8 @@ operators = {
     ast.Or: lambda a,b: a or b
 }
 
-allowed_functions = {"abs": abs, "max": max, "min": min}
-
 def check_trigger(df, condition):
-    if len(df) < 3:
+    if len(df) < 5:
         return False
 
     def get_value(name, index=-1):
@@ -207,11 +193,6 @@ def check_trigger(df, condition):
             for v in node.values[1:]:
                 result = operators[type(node.op)](result, _eval(v))
             return result
-        elif isinstance(node, ast.UnaryOp):
-            if isinstance(node.op, ast.USub):
-                return -_eval(node.operand)
-            if isinstance(node.op, ast.Not):
-                return not _eval(node.operand)
         elif isinstance(node, ast.Compare):
             return operators[type(node.ops[0])](
                 _eval(node.left),
@@ -222,26 +203,15 @@ def check_trigger(df, condition):
                 _eval(node.left),
                 _eval(node.right)
             )
-        elif isinstance(node, ast.Subscript):
-            field = node.value.id
-            index = node.slice.value if isinstance(node.slice, ast.Constant) else _eval(node.slice)
-            return get_value(field, index)
-        elif isinstance(node, ast.Call):
-            func_name = node.func.id
-            if func_name not in allowed_functions:
-                raise ValueError("Function not allowed")
-            return allowed_functions[func_name](*[_eval(arg) for arg in node.args])
         elif isinstance(node, ast.Name):
-            if node.id not in df.columns:
-                raise ValueError(f"Invalid column: {node.id}")
-            return get_value(node.id, -1)
+            return get_value(node.id)
         elif isinstance(node, ast.Constant):
             return node.value
         else:
             raise TypeError(node)
 
-    parsed = ast.parse(condition, mode="eval")
     try:
+        parsed = ast.parse(condition, mode="eval")
         return bool(_eval(parsed))
     except:
         return False
@@ -250,6 +220,7 @@ def check_trigger(df, condition):
 # PROCESS TICKERS
 # =========================
 results = []
+
 for ticker in tickers:
     if ticker not in raw:
         continue
@@ -260,99 +231,62 @@ for ticker in tickers:
     results.append((ticker, df, triggered))
 
 results.sort(key=lambda x: not x[2])
+
 triggered_count = sum(1 for r in results if r[2])
-st.markdown(f"### 🔔 Triggered: {triggered_count} / {len(results)}")
 
-# =========================
-# ALERTS
-# =========================
-if alerts_active and triggered_count > 0:
-    triggered_tickers = [r[0] for r in results if r[2]]
-    new_triggers = [
-        t for t in triggered_tickers
-        if t not in st.session_state.alerted_tickers
-    ]
+with right_col:
+    st.header(f"Results ({triggered_count}/{len(results)})")
 
-    if new_triggers:
-        message_body = f"{trigger_text}\nTriggered Tickers: {', '.join(new_triggers)}"
+    for ticker, df, triggered in results:
 
-        requests.post(
-            f"https://api.telegram.org/bot{telegram_token}/sendMessage",
-            data={
-                "chat_id": telegram_chat_id,
-                "text": f"YachtCode {timeframe} Alert\n{message_body}"
-            }
-        )
-
-        try:
-            msg = MIMEMultipart()
-            msg["From"] = gmail_user
-            msg["To"] = ",".join(alert_emails)
-            msg["Subject"] = f"YachtCode {timeframe} Alert"
-            msg.attach(MIMEText(message_body, "plain"))
-
-            server = smtplib.SMTP("smtp.gmail.com", 587)
-            server.starttls()
-            server.login(gmail_user, gmail_password)
-            server.sendmail(gmail_user, alert_emails, msg.as_string())
-            server.quit()
-        except Exception as e:
-            st.sidebar.error(f"Email error: {e}")
-
-        st.session_state.alerted_tickers.update(new_triggers)
-
-# allow retrigger
-currently_triggered = {r[0] for r in results if r[2]}
-st.session_state.alerted_tickers.intersection_update(currently_triggered)
-
-# =========================
-# DISPLAY CARDS (Expandable Charts with Siren)
-# =========================
-cards_per_row = 4
-
-for i in range(0, len(results), cards_per_row):
-    row = results[i:i+cards_per_row]
-    cols = st.columns(cards_per_row)
-
-    for col, (ticker, df, triggered) in zip(cols, row):
         latest = float(df["Close"].iloc[-1])
         prev = float(df["Close"].iloc[-2])
         change = latest - prev
         pct = (change / prev) * 100
-        color = "#16a34a" if change >= 0 else "#dc2626"
 
-        # Add siren if triggered
         display_name = f"🚨 {ticker}" if triggered else ticker
 
-        with col:
-            with st.expander(display_name, expanded=False):
+        if st.button(display_name, key=f"select_{ticker}"):
+            st.session_state.selected_ticker = ticker
 
-                st.markdown(f"### {latest:.4f}")
-                st.markdown(
-                    f"<span style='color:{color}; font-size:14px;'>"
-                    f"{change:+.4f} ({pct:+.2f}%)</span>",
-                    unsafe_allow_html=True
-                )
+        st.caption(f"{latest:.2f} ({pct:+.2f}%)")
+        st.divider()
 
-                fig = go.Figure(
-                    data=[go.Candlestick(
-                        x=df.index,
-                        open=df["Open"],
-                        high=df["High"],
-                        low=df["Low"],
-                        close=df["Close"],
-                        increasing_line_color="#16a34a",
-                        decreasing_line_color="#dc2626"
-                    )]
-                )
+# =========================
+# CENTER PANEL (CHART)
+# =========================
+with center_col:
+    st.header("Chart")
 
-                fig.update_layout(
-                    height=220,
-                    margin=dict(l=5, r=5, t=5, b=5),
-                    xaxis_rangeslider_visible=False,
-                    showlegend=False,
-                    template="plotly_white"
-                )
+    if st.session_state.selected_ticker:
 
-                st.plotly_chart(fig, use_container_width=True)
+        selected = next(
+            (r for r in results if r[0] == st.session_state.selected_ticker),
+            None
+        )
 
+        if selected:
+            ticker, df, triggered = selected
+
+            fig = go.Figure(
+                data=[go.Candlestick(
+                    x=df.index,
+                    open=df["Open"],
+                    high=df["High"],
+                    low=df["Low"],
+                    close=df["Close"],
+                    increasing_line_color="#16a34a",
+                    decreasing_line_color="#dc2626"
+                )]
+            )
+
+            fig.update_layout(
+                height=600,
+                xaxis_rangeslider_visible=False,
+                template="plotly_white"
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+    else:
+        st.info("Select a ticker from the right panel.")
