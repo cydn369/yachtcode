@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime
 import requests
 import json
 import smtplib
@@ -17,14 +17,15 @@ st.set_page_config(layout="wide")
 # =========================
 # SESSION STATE INIT
 # =========================
-if "timeframe" not in st.session_state:
-    st.session_state.timeframe = "15m"
-if "source_option" not in st.session_state:
-    st.session_state.source_option = "Nifty50"
-if "alerts_active" not in st.session_state:
-    st.session_state.alerts_active = False
+if "scanner_running" not in st.session_state:
+    st.session_state.scanner_running = False
+
+if "active_trigger" not in st.session_state:
+    st.session_state.active_trigger = None
+
 if "alerted_tickers" not in st.session_state:
     st.session_state.alerted_tickers = set()
+
 if "selected_ticker" not in st.session_state:
     st.session_state.selected_ticker = None
 
@@ -38,39 +39,7 @@ alert_emails = st.secrets["alert_emails"]
 telegram_token = st.secrets["telegram_token"]
 telegram_chat_id = st.secrets["telegram_chat_id"]
 
-st.title("Yacht Code")
-
-# =========================
-# CANDLE COUNTDOWN
-# =========================
-def seconds_until_next_candle(timeframe):
-    now = datetime.now()
-
-    if timeframe == "15m":
-        next_candle = (
-            now.replace(
-                minute=(now.minute // 15) * 15,
-                second=0,
-                microsecond=0
-            )
-            + timedelta(minutes=15)
-        )
-        refresh_time = next_candle - timedelta(seconds=30)
-
-    elif timeframe == "1d":
-        next_candle = (now + timedelta(days=1)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
-        refresh_time = next_candle - timedelta(seconds=30)
-
-    return max(int((refresh_time - now).total_seconds()), 0)
-
-def get_autorefresh_interval(timeframe):
-    seconds = seconds_until_next_candle(timeframe)
-    return max(seconds, 5) * 1000
-
-st.caption(f"Next refresh in ~{seconds_until_next_candle(st.session_state.timeframe)} seconds")
-st_autorefresh(interval=get_autorefresh_interval(st.session_state.timeframe), key="auto_refresh")
+st.title("Yacht Code – Real Time Scanner")
 
 # =========================
 # LAYOUT
@@ -78,49 +47,79 @@ st_autorefresh(interval=get_autorefresh_interval(st.session_state.timeframe), ke
 left_col, center_col, right_col = st.columns([1, 2, 1])
 
 # =========================
+# LOAD TRIGGERS
+# =========================
+with open("triggers.json", "r") as f:
+    trigger_formulas = json.load(f)
+
+# =========================
 # LEFT PANEL (CONTROLS)
 # =========================
 with left_col:
     st.header("Controls")
 
-    timeframe = st.selectbox(
-        "Timeframe",
-        ["15m", "1d"],
-        key="timeframe"
-    )
+    timeframe = st.selectbox("Timeframe", ["15m", "1d"])
 
     source_option = st.radio(
-        "Select Ticker Source:",
-        ["Nifty50", "Nifty500", "Forex Pairs", "Upload File"],
-        key="source_option"
+        "Ticker Source",
+        ["Nifty50", "Nifty500", "Forex Pairs", "Upload File"]
     )
 
-    alerts_active = st.checkbox(
-        "Activate Alerts",
-        key="alerts_active"
+    alerts_active = st.checkbox("Activate Alerts")
+
+    st.divider()
+    st.subheader("Trigger")
+
+    trigger_condition = st.selectbox(
+        "Trigger Condition",
+        options=list(trigger_formulas.keys())
     )
+
+    trigger_text = st.text_input(
+        "Edit Trigger",
+        value=trigger_formulas[trigger_condition]
+    )
+
+    if st.button("Apply & Start Scanner", type="primary"):
+        st.session_state.active_trigger = trigger_text
+        st.session_state.scanner_running = True
+        st.session_state.alerted_tickers.clear()
+
+    if st.button("Stop Scanner"):
+        st.session_state.scanner_running = False
+
+    if st.session_state.scanner_running:
+        st.success("Scanner running (updates every 60 seconds)")
+    else:
+        st.info("Scanner stopped")
+
+# =========================
+# REAL-TIME REFRESH (1 MIN)
+# =========================
+if st.session_state.scanner_running:
+    st_autorefresh(interval=60_000, key="scanner_refresh")
+else:
+    st.stop()
 
 # =========================
 # LOAD TICKERS
 # =========================
 tickers = []
 
-if st.session_state.source_option in ["Nifty50", "Nifty500", "Forex Pairs"]:
+if source_option in ["Nifty50", "Nifty500", "Forex Pairs"]:
     file_map = {
         "Nifty50": "Nifty50.txt",
         "Nifty500": "Nifty500.txt",
         "Forex Pairs": "Forex_Pairs.txt"
     }
-    try:
-        with open(file_map[st.session_state.source_option], "r") as f:
-            content = f.read()
-        tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
-    except FileNotFoundError:
-        st.error("Ticker file not found")
-        st.stop()
 
-elif st.session_state.source_option == "Upload File":
-    uploaded_file = st.file_uploader("Upload tickers (txt/csv)", type=["txt", "csv"])
+    with open(file_map[source_option], "r") as f:
+        content = f.read()
+
+    tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
+
+elif source_option == "Upload File":
+    uploaded_file = st.file_uploader("Upload tickers", type=["txt", "csv"])
     if uploaded_file:
         content = uploaded_file.read().decode("utf-8")
         tickers = [
@@ -133,46 +132,45 @@ if not tickers:
     st.stop()
 
 # =========================
-# LOAD TRIGGERS
+# CHUNKED DATA DOWNLOAD
 # =========================
-with open("triggers.json", "r") as f:
-    trigger_formulas = json.load(f)
+def chunk_list(lst, size):
+    for i in range(0, len(lst), size):
+        yield lst[i:i + size]
 
-trigger_condition = left_col.selectbox(
-    "Trigger Condition:",
-    options=list(trigger_formulas.keys())
-)
-
-trigger_text = left_col.text_input(
-    "Custom / Edit Trigger:",
-    value=trigger_formulas[trigger_condition]
-)
-
-# =========================
-# FETCH DATA
-# =========================
 @st.cache_data(ttl=30)
 def fetch_data(tickers, timeframe):
-    df = yf.download(
-        tickers=tickers,
-        period="5d" if timeframe == "15m" else "6mo",
-        interval=timeframe,
-        group_by="ticker",
-        progress=False,
-        threads=True
-    )
-    if not isinstance(df.columns, pd.MultiIndex):
-        df = pd.concat({tickers[0]: df}, axis=1)
-    return df
+    all_data = []
 
-raw = fetch_data(tickers, st.session_state.timeframe)
+    for chunk in chunk_list(tickers, 50):  # 50 tickers per request
+        df = yf.download(
+            tickers=chunk,
+            period="5d" if timeframe == "15m" else "6mo",
+            interval=timeframe,
+            group_by="ticker",
+            progress=False,
+            threads=True
+        )
+        all_data.append(df)
+
+    if not all_data:
+        return pd.DataFrame()
+
+    return pd.concat(all_data, axis=1)
+
+raw = fetch_data(tickers, timeframe)
+
+if raw.empty:
+    st.warning("No data received")
+    st.stop()
 
 # =========================
-# SAFE TRIGGER EVALUATOR
+# SAFE TRIGGER ENGINE
 # =========================
 operators = {
     ast.Gt: op.gt, ast.Lt: op.lt, ast.GtE: op.ge, ast.LtE: op.le,
-    ast.Eq: op.eq, ast.NotEq: op.ne, ast.Add: op.add, ast.Sub: op.sub,
+    ast.Eq: op.eq, ast.NotEq: op.ne,
+    ast.Add: op.add, ast.Sub: op.sub,
     ast.Mult: op.mul, ast.Div: op.truediv,
     ast.And: lambda a,b: a and b,
     ast.Or: lambda a,b: a or b
@@ -224,16 +222,66 @@ results = []
 for ticker in tickers:
     if ticker not in raw:
         continue
+
     df = raw[ticker].dropna().tail(10)
     if df.empty:
         continue
-    triggered = check_trigger(df, trigger_text)
+
+    triggered = check_trigger(df, st.session_state.active_trigger)
     results.append((ticker, df, triggered))
 
+# Sort triggered first
 results.sort(key=lambda x: not x[2])
 
 triggered_count = sum(1 for r in results if r[2])
 
+# =========================
+# ALERTS
+# =========================
+if alerts_active and triggered_count > 0:
+
+    triggered_tickers = [r[0] for r in results if r[2]]
+    new_triggers = [
+        t for t in triggered_tickers
+        if t not in st.session_state.alerted_tickers
+    ]
+
+    if new_triggers:
+        message_body = (
+            f"{st.session_state.active_trigger}\n"
+            f"Triggered: {', '.join(new_triggers)}"
+        )
+
+        # Telegram
+        requests.post(
+            f"https://api.telegram.org/bot{telegram_token}/sendMessage",
+            data={
+                "chat_id": telegram_chat_id,
+                "text": message_body
+            }
+        )
+
+        # Email
+        try:
+            msg = MIMEMultipart()
+            msg["From"] = gmail_user
+            msg["To"] = ",".join(alert_emails)
+            msg["Subject"] = "YachtCode Alert"
+            msg.attach(MIMEText(message_body, "plain"))
+
+            server = smtplib.SMTP("smtp.gmail.com", 587)
+            server.starttls()
+            server.login(gmail_user, gmail_password)
+            server.sendmail(gmail_user, alert_emails, msg.as_string())
+            server.quit()
+        except Exception as e:
+            left_col.error(f"Email error: {e}")
+
+        st.session_state.alerted_tickers.update(new_triggers)
+
+# =========================
+# RIGHT PANEL (RESULTS)
+# =========================
 with right_col:
     st.header(f"Results ({triggered_count}/{len(results)})")
 
@@ -281,12 +329,11 @@ with center_col:
             )
 
             fig.update_layout(
-                height=600,
+                height=650,
                 xaxis_rangeslider_visible=False,
                 template="plotly_white"
             )
 
             st.plotly_chart(fig, use_container_width=True)
-
     else:
-        st.info("Select a ticker from the right panel.")
+        st.info("Click a ticker on the right to load chart.")
