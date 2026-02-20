@@ -342,28 +342,49 @@ st.session_state.alerted_tickers.intersection_update(currently_triggered)
 with right_col:
     st.header(f"Results ({triggered_count}/{len(results)})")
 
+    # Scrollable container start
     st.markdown(
-        '<div class="scrollable-results">',
+        """
+        <style>
+        .scrollable-container {
+            height: 600px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        .ticker-link {
+            text-decoration: none;
+            color: #0c4a6e;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .ticker-link:hover {
+            color: #f97316;
+        }
+        </style>
+        <div class="scrollable-container">
+        """,
         unsafe_allow_html=True
     )
 
+    # Ticker list
     for ticker, df, triggered in results:
         latest = float(df["Close"].iloc[-1])
         prev = float(df["Close"].iloc[-2])
         pct = ((latest - prev)/prev)*100
 
-        label = f"🚨 {ticker}" if triggered else ticker
+        siren = "🚨 " if triggered else ""
+        # clicking sets selected_ticker
+        link_html = f"""
+        <a href="#" class="ticker-link" onclick="window.streamlitRun('{ticker}')">
+            {siren}{ticker} ({latest:.2f}, {pct:+.2f}%)
+        </a><br><br>
+        """
+        st.markdown(link_html, unsafe_allow_html=True)
 
-        if st.button(label, key=f"select_{ticker}"):
-            st.session_state.selected_ticker = ticker
-
-        st.caption(f"{latest:.2f} ({pct:+.2f}%)")
-        st.divider()
-
-    st.markdown(
-        '</div>',
-        unsafe_allow_html=True
-    )
+    st.markdown("</div>", unsafe_allow_html=True)
 # =========================
 # CENTER PANEL (CHART & TICKER INFO)
 # =========================
@@ -408,4 +429,5 @@ with center_col:
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Click a ticker on the right to load chart.")
+
 
