@@ -20,13 +20,13 @@ st.set_page_config(layout="wide")
 st.markdown(
     """
     <style>
-    /* Scrollable right column container */
-    [data-testid="stVerticalBlock"] > div:first-child > div:last-child > div:nth-child(3) > div {
+    .scrollable-results {
         height: 600px;  /* fixed height */
         overflow-y: auto;
         padding-right: 10px;
-        border: 1px solid #eee;
-        border-radius: 6px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background-color: #fafafa;
     }
     </style>
     """,
@@ -342,6 +342,11 @@ st.session_state.alerted_tickers.intersection_update(currently_triggered)
 with right_col:
     st.header(f"Results ({triggered_count}/{len(results)})")
 
+    st.markdown(
+        '<div class="scrollable-results">',
+        unsafe_allow_html=True
+    )
+
     for ticker, df, triggered in results:
         latest = float(df["Close"].iloc[-1])
         prev = float(df["Close"].iloc[-2])
@@ -355,6 +360,10 @@ with right_col:
         st.caption(f"{latest:.2f} ({pct:+.2f}%)")
         st.divider()
 
+    st.markdown(
+        '</div>',
+        unsafe_allow_html=True
+    )
 # =========================
 # CENTER PANEL (CHART & TICKER INFO)
 # =========================
@@ -399,3 +408,4 @@ with center_col:
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Click a ticker on the right to load chart.")
+
