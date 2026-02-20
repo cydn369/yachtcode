@@ -15,6 +15,24 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(layout="wide")
 
 # =========================
+# CSS FOR SCROLLABLE RESULTS
+# =========================
+st.markdown(
+    """
+    <style>
+    .scrollable-results {
+        height: 600px;  /* adjust as needed */
+        overflow-y: auto;
+        padding-right: 10px;
+        border: 1px solid #eee;
+        border-radius: 6px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# =========================
 # SESSION STATE INIT
 # =========================
 defaults = {
@@ -318,10 +336,12 @@ currently_triggered = {r[0] for r in results if r[2]}
 st.session_state.alerted_tickers.intersection_update(currently_triggered)
 
 # =========================
-# RIGHT PANEL (RESULTS)
+# RIGHT PANEL (RESULTS) - Scrollable
 # =========================
 with right_col:
     st.header(f"Results ({triggered_count}/{len(results)})")
+
+    st.markdown('<div class="scrollable-results">', unsafe_allow_html=True)
 
     for ticker, df, triggered in results:
         latest = float(df["Close"].iloc[-1])
@@ -336,21 +356,35 @@ with right_col:
         st.caption(f"{latest:.2f} ({pct:+.2f}%)")
         st.divider()
 
+    st.markdown('</div>', unsafe_allow_html=True)
+
 # =========================
-# CENTER PANEL (CHART)
+# CENTER PANEL (CHART & TICKER INFO)
 # =========================
 with center_col:
     st.header("Chart")
 
     if st.session_state.selected_ticker:
         selected = next(
-            (r for r in results if r[0]==st.session_state.selected_ticker),
+            (r for r in results if r[0] == st.session_state.selected_ticker),
             None
         )
         if selected:
             ticker, df, triggered = selected
+            latest = float(df["Close"].iloc[-1])
+            prev = float(df["Close"].iloc[-2])
+            change = latest - prev
+            pct = (change / prev) * 100
+            color = "#16a34a" if change >= 0 else "#dc2626"
+            siren = "🚨 " if triggered else ""
 
-            st.subheader(f"{ticker}")
+            st.markdown(
+                f"<h3 style='margin-bottom:5px'>{siren}{ticker} "
+                f"<span style='color:{color}; font-weight:normal; font-size:18px;'>"
+                f"{latest:.2f} ({pct:+.2f}%)</span></h3>",
+                unsafe_allow_html=True
+            )
+
             fig = go.Figure(data=[go.Candlestick(
                 x=df.index,
                 open=df["Open"],
@@ -368,4 +402,3 @@ with center_col:
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Click a ticker on the right to load chart.")
-
