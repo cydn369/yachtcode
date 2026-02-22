@@ -1,5 +1,6 @@
 {
-  "Default": "(((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))) and (100*((High-Low)/Open)>=0.555)",
+  "Default": "((((High-Open)/Open)>0.03) or (((Open-Low)/Open)>0.03)) and (abs(Close-Open)/Open)<0.001",
+  "Motherload": "(((abs(Open - High) / Open)*100 >= 0.333 or (abs(Open - Low) / Open)*100 >= 0.333) and (4*abs(Open-Close)<abs(High-Low))) and (100*((High-Low)/Open)>=0.555)",
   "BullishMarubozu": "Close[-2] > Open[-2] and High[-2]-Close[-2] <= 0.05*(Close[-2]-Open[-2]) and Open[-2]-Low[-2] <= 0.05*(Close[-2]-Open[-2]) and Close[-1] > Open[-1] and Close[-1] > High[-2]",
   "BearishMarubozu": "Open[-2] > Close[-2] and High[-2]-Open[-2] <= 0.05*(Open[-2]-Close[-2]) and Close[-2]-Low[-2] <= 0.05*(Open[-2]-Close[-2]) and Close[-1] < Open[-1] and Close[-1] < Low[-2]",
   "Doji": "abs(Close[-1]-Open[-1]) <= 0.2*(High[-1]-Low[-1])",
