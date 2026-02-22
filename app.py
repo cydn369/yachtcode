@@ -41,7 +41,7 @@ alert_emails = st.secrets["alert_emails"]
 telegram_token = st.secrets["telegram_token"]
 telegram_chat_id = st.secrets["telegram_chat_id"]
 
-st.title("Yacht Code v2 – Real Time Scanner")
+st.title("Yacht Code")
 
 # =========================
 # LAYOUT
@@ -368,4 +368,5 @@ with center_col:
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Click a ticker on the right to load chart.")
+
 
