@@ -24,7 +24,7 @@ defaults = {
     "selected_ticker": None,
     "uploaded_tickers": [],
     "alerts_active": False,
-    "timeframe": "15m",
+    "timeframe": "1d",
     "source_option": "Nifty50"
 }
 
@@ -368,3 +368,4 @@ with center_col:
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Click a ticker on the right to load chart.")
+
