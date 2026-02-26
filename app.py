@@ -13,6 +13,19 @@ st.set_page_config(layout="wide")
 
 st.title("Yacht Code")
 
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-image: url('background.png');  /* Direct path to the file */
+        background-size: cover;
+        background-position: center;
+    }
+    </style>
+    """, 
+    unsafe_allow_html=True
+)
+
 # =========================
 # SESSION STATE INIT
 # =========================
@@ -195,11 +208,9 @@ def check_trigger(df, condition):
 # RIGHT PANEL (RESULTS)
 # =========================
 with right_col:
-
     st.header("Results")
 
     if scan_clicked:
-
         if not tickers:
             st.warning("No tickers loaded.")
             st.stop()
@@ -208,7 +219,7 @@ with right_col:
 
             raw = yf.download(
                 tickers=tickers,
-                period="5d" if st.session_state.timeframe=="15m" else "1mo",
+                period="5d" if st.session_state.timeframe == "15m" else "1mo",
                 interval=st.session_state.timeframe,
                 group_by="ticker",
                 progress=False,
@@ -235,21 +246,26 @@ with right_col:
                 triggered = check_trigger(df, trigger_text)
                 current_price = float(df["Close"].iloc[-1])
 
+                # Adding the Yahoo Finance chart link
+                yahoo_finance_link = f"https://finance.yahoo.com/chart/{ticker}"
+
                 results.append({
                     "Ticker": f"🚨 {ticker}" if triggered else ticker,
                     "RawTicker": ticker,
                     "Current Price": round(current_price, 2),
-                    "Triggered": triggered
+                    "Triggered": triggered,
+                    "Chart Link": f'<a href="{yahoo_finance_link}" target="_blank">View Chart</a>'  # This will be a clickable link
                 })
 
             result_df = pd.DataFrame(results)
             result_df = result_df.sort_values(by="Triggered", ascending=False)
 
-            display_df = result_df[["Ticker", "Current Price"]]
+            display_df = result_df[["Ticker", "Current Price", "Chart Link"]]
             triggered_count = result_df["Triggered"].sum()
 
             total_processed = len(result_df)
             st.success(f"{triggered_count} of {total_processed} Stocks Triggered")
+            st.markdown(display_df.to_html(escape=False), unsafe_allow_html=True)  # Render HTML for the "Chart Link"
             st.dataframe(display_df, use_container_width=True)
 
             # ALERT LOGIC
@@ -294,4 +310,5 @@ with right_col:
                     st.session_state.alerted_tickers.update(new_triggers)
 
                 st.session_state.alerted_tickers.intersection_update(triggered_tickers)
+
 
