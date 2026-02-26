@@ -110,7 +110,7 @@ elif st.session_state.source_option == "Upload File":
     tickers = st.session_state.uploaded_tickers
 
 # =========================
-# SAFE AST ENGINE
+# ORIGINAL AST ENGINE (RESTORED)
 # =========================
 operators = {
     ast.Gt: op.gt, ast.Lt: op.lt, ast.GtE: op.ge, ast.LtE: op.le,
@@ -121,7 +121,7 @@ operators = {
     ast.Or: lambda a,b: a or b
 }
 
-ALLOWED_FIELDS = {"Open","High","Low","Close","Volume"}
+allowed_functions = {"abs": abs, "max": max, "min": min}
 
 def check_trigger(df, condition):
 
@@ -138,6 +138,12 @@ def check_trigger(df, condition):
                 result = operators[type(node.op)](result, _eval(v))
             return result
 
+        elif isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.USub):
+                return -_eval(node.operand)
+            if isinstance(node.op, ast.Not):
+                return not _eval(node.operand)
+
         elif isinstance(node, ast.Compare):
             return operators[type(node.ops[0])](
                 _eval(node.left),
@@ -150,9 +156,18 @@ def check_trigger(df, condition):
                 _eval(node.right)
             )
 
+        elif isinstance(node, ast.Subscript):
+            field = node.value.id
+            index = node.slice.value if isinstance(node.slice, ast.Constant) else _eval(node.slice)
+            return get_value(field, index)
+
+        elif isinstance(node, ast.Call):
+            func_name = node.func.id
+            if func_name not in allowed_functions:
+                raise ValueError("Function not allowed")
+            return allowed_functions[func_name](*[_eval(arg) for arg in node.args])
+
         elif isinstance(node, ast.Name):
-            if node.id not in ALLOWED_FIELDS:
-                raise ValueError("Invalid field")
             return get_value(node.id)
 
         elif isinstance(node, ast.Constant):
@@ -227,9 +242,7 @@ if st.button("Scan Market", type="primary"):
         st.success(f"{triggered_count} Stocks Triggered")
         st.dataframe(display_df, use_container_width=True)
 
-        # =========================
         # ALERT LOGIC
-        # =========================
         if st.session_state.alerts_active:
 
             triggered_tickers = result_df[
@@ -248,13 +261,11 @@ if st.button("Scan Market", type="primary"):
                     f"Triggered: {', '.join(new_triggers)}"
                 )
 
-                # Telegram
                 requests.post(
                     f"https://api.telegram.org/bot{telegram_token}/sendMessage",
                     data={"chat_id": telegram_chat_id, "text": message}
                 )
 
-                # Email
                 try:
                     msg = MIMEMultipart()
                     msg["From"] = gmail_user
@@ -268,10 +279,9 @@ if st.button("Scan Market", type="primary"):
                     server.sendmail(gmail_user, alert_emails, msg.as_string())
                     server.quit()
 
-                except Exception as e:
-                    st.error(f"Email error: {e}")
+                except:
+                    pass
 
                 st.session_state.alerted_tickers.update(new_triggers)
 
-            # Retrigger logic
             st.session_state.alerted_tickers.intersection_update(triggered_tickers)
