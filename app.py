@@ -49,39 +49,48 @@ except FileNotFoundError:
     st.stop()
 
 # =========================
-# CONTROLS
+# LAYOUT (LEFT + RIGHT)
 # =========================
-st.header("Controls")
+left_col, right_col = st.columns([1, 2])
 
-st.session_state.timeframe = st.selectbox(
-    "Timeframe",
-    ["15m", "1d"],
-    index=["15m", "1d"].index(st.session_state.timeframe)
-)
+# =========================
+# LEFT PANEL (CONTROLS)
+# =========================
+with left_col:
 
-st.session_state.source_option = st.radio(
-    "Ticker Source",
-    ["Nifty50", "Nifty500", "Forex Pairs", "Upload File"],
-    index=["Nifty50","Nifty500","Forex Pairs","Upload File"]
-    .index(st.session_state.source_option)
-)
+    st.header("Controls")
 
-st.session_state.alerts_active = st.checkbox(
-    "Activate Alerts",
-    value=st.session_state.alerts_active
-)
+    st.session_state.timeframe = st.selectbox(
+        "Timeframe",
+        ["15m", "1d"],
+        index=["15m", "1d"].index(st.session_state.timeframe)
+    )
 
-st.subheader("Trigger")
+    st.session_state.source_option = st.radio(
+        "Ticker Source",
+        ["Nifty50", "Nifty500", "Forex Pairs", "Upload File"],
+        index=["Nifty50","Nifty500","Forex Pairs","Upload File"]
+        .index(st.session_state.source_option)
+    )
 
-trigger_condition = st.selectbox(
-    "Trigger Condition",
-    list(trigger_formulas.keys())
-)
+    st.session_state.alerts_active = st.checkbox(
+        "Activate Alerts",
+        value=st.session_state.alerts_active
+    )
 
-trigger_text = st.text_input(
-    "Edit Trigger",
-    value=trigger_formulas[trigger_condition]
-)
+    st.subheader("Trigger")
+
+    trigger_condition = st.selectbox(
+        "Trigger Condition",
+        list(trigger_formulas.keys())
+    )
+
+    trigger_text = st.text_input(
+        "Edit Trigger",
+        value=trigger_formulas[trigger_condition]
+    )
+
+    scan_clicked = st.button("Scan Market", type="primary")
 
 # =========================
 # LOAD TICKERS
@@ -110,7 +119,7 @@ elif st.session_state.source_option == "Upload File":
     tickers = st.session_state.uploaded_tickers
 
 # =========================
-# ORIGINAL AST ENGINE (RESTORED)
+# ORIGINAL AST ENGINE
 # =========================
 operators = {
     ast.Gt: op.gt, ast.Lt: op.lt, ast.GtE: op.ge, ast.LtE: op.le,
@@ -183,105 +192,104 @@ def check_trigger(df, condition):
         return False
 
 # =========================
-# SCAN BUTTON
+# RIGHT PANEL (RESULTS)
 # =========================
-if st.button("Scan Market", type="primary"):
+with right_col:
 
-    if not tickers:
-        st.warning("No tickers loaded.")
-        st.stop()
+    st.header("Results")
 
-    with st.spinner("Scanning..."):
+    if scan_clicked:
 
-        raw = yf.download(
-            tickers=tickers,
-            period="5d" if st.session_state.timeframe=="15m" else "1mo",
-            interval=st.session_state.timeframe,
-            group_by="ticker",
-            progress=False,
-            threads=True
-        )
-
-        if raw.empty:
-            st.warning("No data received.")
+        if not tickers:
+            st.warning("No tickers loaded.")
             st.stop()
 
-        if not isinstance(raw.columns, pd.MultiIndex):
-            raw = pd.concat({tickers[0]: raw}, axis=1)
+        with st.spinner("Scanning..."):
 
-        results = []
+            raw = yf.download(
+                tickers=tickers,
+                period="5d" if st.session_state.timeframe=="15m" else "1mo",
+                interval=st.session_state.timeframe,
+                group_by="ticker",
+                progress=False,
+                threads=True
+            )
 
-        for ticker in tickers:
-            if ticker not in raw:
-                continue
+            if raw.empty:
+                st.warning("No data received.")
+                st.stop()
 
-            df = raw[ticker].dropna().tail(15)
-            if df.empty:
-                continue
+            if not isinstance(raw.columns, pd.MultiIndex):
+                raw = pd.concat({tickers[0]: raw}, axis=1)
 
-            triggered = check_trigger(df, trigger_text)
-            current_price = float(df["Close"].iloc[-1])
+            results = []
 
-            results.append({
-                "Ticker": f"🚨 {ticker}" if triggered else ticker,
-                "RawTicker": ticker,
-                "Current Price": round(current_price, 2),
-                "Triggered": triggered
-            })
+            for ticker in tickers:
+                if ticker not in raw:
+                    continue
 
-        if not results:
-            st.info("No data available.")
-            st.stop()
+                df = raw[ticker].dropna().tail(15)
+                if df.empty:
+                    continue
 
-        result_df = pd.DataFrame(results)
-        result_df = result_df.sort_values(by="Triggered", ascending=False)
+                triggered = check_trigger(df, trigger_text)
+                current_price = float(df["Close"].iloc[-1])
 
-        display_df = result_df[["Ticker", "Current Price"]]
-        triggered_count = result_df["Triggered"].sum()
+                results.append({
+                    "Ticker": f"🚨 {ticker}" if triggered else ticker,
+                    "RawTicker": ticker,
+                    "Current Price": round(current_price, 2),
+                    "Triggered": triggered
+                })
 
-        st.success(f"{triggered_count} Stocks Triggered")
-        st.dataframe(display_df, use_container_width=True)
+            result_df = pd.DataFrame(results)
+            result_df = result_df.sort_values(by="Triggered", ascending=False)
 
-        # ALERT LOGIC
-        if st.session_state.alerts_active:
+            display_df = result_df[["Ticker", "Current Price"]]
+            triggered_count = result_df["Triggered"].sum()
 
-            triggered_tickers = result_df[
-                result_df["Triggered"]
-            ]["RawTicker"].tolist()
+            st.success(f"{triggered_count} Stocks Triggered")
+            st.dataframe(display_df, use_container_width=True)
 
-            new_triggers = [
-                t for t in triggered_tickers
-                if t not in st.session_state.alerted_tickers
-            ]
+            # ALERT LOGIC
+            if st.session_state.alerts_active:
 
-            if new_triggers:
+                triggered_tickers = result_df[
+                    result_df["Triggered"]
+                ]["RawTicker"].tolist()
 
-                message = (
-                    f"{trigger_text}\n"
-                    f"Triggered: {', '.join(new_triggers)}"
-                )
+                new_triggers = [
+                    t for t in triggered_tickers
+                    if t not in st.session_state.alerted_tickers
+                ]
 
-                requests.post(
-                    f"https://api.telegram.org/bot{telegram_token}/sendMessage",
-                    data={"chat_id": telegram_chat_id, "text": message}
-                )
+                if new_triggers:
 
-                try:
-                    msg = MIMEMultipart()
-                    msg["From"] = gmail_user
-                    msg["To"] = ",".join(alert_emails)
-                    msg["Subject"] = "YachtCode Alert"
-                    msg.attach(MIMEText(message, "plain"))
+                    message = (
+                        f"{trigger_text}\n"
+                        f"Triggered: {', '.join(new_triggers)}"
+                    )
 
-                    server = smtplib.SMTP("smtp.gmail.com", 587)
-                    server.starttls()
-                    server.login(gmail_user, gmail_password)
-                    server.sendmail(gmail_user, alert_emails, msg.as_string())
-                    server.quit()
+                    requests.post(
+                        f"https://api.telegram.org/bot{telegram_token}/sendMessage",
+                        data={"chat_id": telegram_chat_id, "text": message}
+                    )
 
-                except:
-                    pass
+                    try:
+                        msg = MIMEMultipart()
+                        msg["From"] = gmail_user
+                        msg["To"] = ",".join(alert_emails)
+                        msg["Subject"] = "YachtCode Alert"
+                        msg.attach(MIMEText(message, "plain"))
 
-                st.session_state.alerted_tickers.update(new_triggers)
+                        server = smtplib.SMTP("smtp.gmail.com", 587)
+                        server.starttls()
+                        server.login(gmail_user, gmail_password)
+                        server.sendmail(gmail_user, alert_emails, msg.as_string())
+                        server.quit()
+                    except:
+                        pass
 
-            st.session_state.alerted_tickers.intersection_update(triggered_tickers)
+                    st.session_state.alerted_tickers.update(new_triggers)
+
+                st.session_state.alerted_tickers.intersection_update(triggered_tickers)
