@@ -9,20 +9,23 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+# =========================
+# PAGE CONFIG AND BACKGROUND
+# =========================
 st.set_page_config(layout="wide")
-
 st.title("Yacht Code")
 
+# Set PNG background
 st.markdown(
     """
     <style>
     .stApp {
-        background-image: url('background.png');  /* Direct path to the file */
+        background-image: url('background.png');  /* Use local PNG file */
         background-size: cover;
         background-position: center;
     }
     </style>
-    """, 
+    """,
     unsafe_allow_html=True
 )
 
@@ -70,7 +73,6 @@ left_col, right_col = st.columns([1, 2])
 # LEFT PANEL (CONTROLS)
 # =========================
 with left_col:
-
     st.header("Controls")
 
     st.session_state.timeframe = st.selectbox(
@@ -92,16 +94,8 @@ with left_col:
     )
 
     st.subheader("Trigger")
-
-    trigger_condition = st.selectbox(
-        "Trigger Condition",
-        list(trigger_formulas.keys())
-    )
-
-    trigger_text = st.text_input(
-        "Edit Trigger",
-        value=trigger_formulas[trigger_condition]
-    )
+    trigger_condition = st.selectbox("Trigger Condition", list(trigger_formulas.keys()))
+    trigger_text = st.text_input("Edit Trigger", value=trigger_formulas[trigger_condition])
 
     scan_clicked = st.button("Scan Market", type="primary")
 
@@ -132,7 +126,7 @@ elif st.session_state.source_option == "Upload File":
     tickers = st.session_state.uploaded_tickers
 
 # =========================
-# ORIGINAL AST ENGINE
+# AST TRIGGER ENGINE
 # =========================
 operators = {
     ast.Gt: op.gt, ast.Lt: op.lt, ast.GtE: op.ge, ast.LtE: op.le,
@@ -142,62 +136,44 @@ operators = {
     ast.And: lambda a,b: a and b,
     ast.Or: lambda a,b: a or b
 }
-
 allowed_functions = {"abs": abs, "max": max, "min": min}
 
 def check_trigger(df, condition):
-
     def get_value(name, index=-1):
         return float(df.iloc[index][name])
 
     def _eval(node):
         if isinstance(node, ast.Expression):
             return _eval(node.body)
-
         elif isinstance(node, ast.BoolOp):
             result = _eval(node.values[0])
             for v in node.values[1:]:
                 result = operators[type(node.op)](result, _eval(v))
             return result
-
         elif isinstance(node, ast.UnaryOp):
             if isinstance(node.op, ast.USub):
                 return -_eval(node.operand)
             if isinstance(node.op, ast.Not):
                 return not _eval(node.operand)
-
         elif isinstance(node, ast.Compare):
-            return operators[type(node.ops[0])](
-                _eval(node.left),
-                _eval(node.comparators[0])
-            )
-
+            return operators[type(node.ops[0])](_eval(node.left), _eval(node.comparators[0]))
         elif isinstance(node, ast.BinOp):
-            return operators[type(node.op)](
-                _eval(node.left),
-                _eval(node.right)
-            )
-
+            return operators[type(node.op)](_eval(node.left), _eval(node.right))
         elif isinstance(node, ast.Subscript):
             field = node.value.id
             index = node.slice.value if isinstance(node.slice, ast.Constant) else _eval(node.slice)
             return get_value(field, index)
-
         elif isinstance(node, ast.Call):
             func_name = node.func.id
             if func_name not in allowed_functions:
                 raise ValueError("Function not allowed")
             return allowed_functions[func_name](*[_eval(arg) for arg in node.args])
-
         elif isinstance(node, ast.Name):
             return get_value(node.id)
-
         elif isinstance(node, ast.Constant):
             return node.value
-
         else:
             raise TypeError(node)
-
     try:
         parsed = ast.parse(condition, mode="eval")
         return bool(_eval(parsed))
@@ -216,10 +192,9 @@ with right_col:
             st.stop()
 
         with st.spinner("Scanning..."):
-
             raw = yf.download(
                 tickers=tickers,
-                period="5d" if st.session_state.timeframe == "15m" else "1mo",
+                period="5d" if st.session_state.timeframe=="15m" else "1mo",
                 interval=st.session_state.timeframe,
                 group_by="ticker",
                 progress=False,
@@ -245,8 +220,6 @@ with right_col:
 
                 triggered = check_trigger(df, trigger_text)
                 current_price = float(df["Close"].iloc[-1])
-
-                # Adding the Yahoo Finance chart link
                 yahoo_finance_link = f"https://finance.yahoo.com/chart/{ticker}"
 
                 results.append({
@@ -254,44 +227,36 @@ with right_col:
                     "RawTicker": ticker,
                     "Current Price": round(current_price, 2),
                     "Triggered": triggered,
-                    "Chart Link": f'<a href="{yahoo_finance_link}" target="_blank">View Chart</a>'  # This will be a clickable link
+                    "Chart Link": f'<a href="{yahoo_finance_link}" target="_blank">View Chart</a>'
                 })
 
             result_df = pd.DataFrame(results)
             result_df = result_df.sort_values(by="Triggered", ascending=False)
-
             display_df = result_df[["Ticker", "Current Price", "Chart Link"]]
-            triggered_count = result_df["Triggered"].sum()
 
+            triggered_count = result_df["Triggered"].sum()
             total_processed = len(result_df)
             st.success(f"{triggered_count} of {total_processed} Stocks Triggered")
-            st.markdown(display_df.to_html(escape=False), unsafe_allow_html=True)  # Render HTML for the "Chart Link"
-            st.dataframe(display_df, use_container_width=True)
 
+            st.markdown(display_df.to_html(escape=False), unsafe_allow_html=True)
+
+            # =========================
             # ALERT LOGIC
+            # =========================
             if st.session_state.alerts_active:
-
-                triggered_tickers = result_df[
-                    result_df["Triggered"]
-                ]["RawTicker"].tolist()
-
-                new_triggers = [
-                    t for t in triggered_tickers
-                    if t not in st.session_state.alerted_tickers
-                ]
+                triggered_tickers = result_df[result_df["Triggered"]]["RawTicker"].tolist()
+                new_triggers = [t for t in triggered_tickers if t not in st.session_state.alerted_tickers]
 
                 if new_triggers:
+                    message = f"{trigger_text}\nTriggered: {', '.join(new_triggers)}"
 
-                    message = (
-                        f"{trigger_text}\n"
-                        f"Triggered: {', '.join(new_triggers)}"
-                    )
-
+                    # Telegram alert
                     requests.post(
                         f"https://api.telegram.org/bot{telegram_token}/sendMessage",
                         data={"chat_id": telegram_chat_id, "text": message}
                     )
 
+                    # Email alert
                     try:
                         msg = MIMEMultipart()
                         msg["From"] = gmail_user
@@ -310,5 +275,3 @@ with right_col:
                     st.session_state.alerted_tickers.update(new_triggers)
 
                 st.session_state.alerted_tickers.intersection_update(triggered_tickers)
-
-
