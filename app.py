@@ -248,7 +248,8 @@ with right_col:
             display_df = result_df[["Ticker", "Current Price"]]
             triggered_count = result_df["Triggered"].sum()
 
-            st.success(f"{triggered_count} Stocks Triggered")
+            total_processed = len(result_df)
+            st.success(f"{triggered_count} of {total_processed} Stocks Triggered")
             st.dataframe(display_df, use_container_width=True)
 
             # ALERT LOGIC
@@ -293,3 +294,4 @@ with right_col:
                     st.session_state.alerted_tickers.update(new_triggers)
 
                 st.session_state.alerted_tickers.intersection_update(triggered_tickers)
+
