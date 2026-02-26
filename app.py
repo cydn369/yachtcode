@@ -15,20 +15,6 @@ from email.mime.multipart import MIMEMultipart
 st.set_page_config(layout="wide")
 st.title("Yacht Code")
 
-# Set PNG background
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-image: url('background.png');  /* Use local PNG file */
-        background-size: cover;
-        background-position: center;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 # =========================
 # SESSION STATE INIT
 # =========================
@@ -275,3 +261,4 @@ with right_col:
                     st.session_state.alerted_tickers.update(new_triggers)
 
                 st.session_state.alerted_tickers.intersection_update(triggered_tickers)
+
