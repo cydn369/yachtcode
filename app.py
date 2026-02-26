@@ -1,31 +1,28 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import plotly.graph_objects as go
-from datetime import datetime
-import requests
 import json
+import ast
+import operator as op
+import requests
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import ast
-import operator as op
-from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(layout="wide")
+
+st.title("Yacht Code")
 
 # =========================
 # SESSION STATE INIT
 # =========================
 defaults = {
-    "scanner_running": False,
     "active_trigger": None,
-    "alerted_tickers": set(),
-    "selected_ticker": None,
     "uploaded_tickers": [],
-    "alerts_active": False,
     "timeframe": "1d",
-    "source_option": "Nifty50"
+    "source_option": "Nifty50",
+    "alerts_active": False,
+    "alerted_tickers": set()
 }
 
 for k, v in defaults.items():
@@ -41,13 +38,6 @@ alert_emails = st.secrets["alert_emails"]
 telegram_token = st.secrets["telegram_token"]
 telegram_chat_id = st.secrets["telegram_chat_id"]
 
-st.title("Yacht Code")
-
-# =========================
-# LAYOUT
-# =========================
-left_col, center_col, right_col = st.columns([1, 2, 1])
-
 # =========================
 # LOAD TRIGGERS
 # =========================
@@ -59,62 +49,39 @@ except FileNotFoundError:
     st.stop()
 
 # =========================
-# LEFT PANEL
+# CONTROLS
 # =========================
-with left_col:
-    st.header("Controls")
+st.header("Controls")
 
-    st.session_state.timeframe = st.selectbox(
-        "Timeframe",
-        ["15m", "1d"],
-        index=["15m", "1d"].index(st.session_state.timeframe)
-    )
+st.session_state.timeframe = st.selectbox(
+    "Timeframe",
+    ["15m", "1d"],
+    index=["15m", "1d"].index(st.session_state.timeframe)
+)
 
-    st.session_state.source_option = st.radio(
-        "Ticker Source",
-        ["Nifty50", "Nifty500", "Forex Pairs", "Upload File"],
-        index=["Nifty50","Nifty500","Forex Pairs","Upload File"]
-        .index(st.session_state.source_option)
-    )
+st.session_state.source_option = st.radio(
+    "Ticker Source",
+    ["Nifty50", "Nifty500", "Forex Pairs", "Upload File"],
+    index=["Nifty50","Nifty500","Forex Pairs","Upload File"]
+    .index(st.session_state.source_option)
+)
 
-    st.session_state.alerts_active = st.checkbox(
-        "Activate Alerts",
-        value=st.session_state.alerts_active
-    )
+st.session_state.alerts_active = st.checkbox(
+    "Activate Alerts",
+    value=st.session_state.alerts_active
+)
 
-    st.divider()
-    st.subheader("Trigger")
+st.subheader("Trigger")
 
-    trigger_condition = st.selectbox(
-        "Trigger Condition",
-        list(trigger_formulas.keys())
-    )
+trigger_condition = st.selectbox(
+    "Trigger Condition",
+    list(trigger_formulas.keys())
+)
 
-    trigger_text = st.text_input(
-        "Edit Trigger",
-        value=trigger_formulas[trigger_condition]
-    )
-
-    if st.button("Apply & Start Scanner", type="primary"):
-        st.session_state.active_trigger = trigger_text
-        st.session_state.scanner_running = True
-        st.session_state.alerted_tickers.clear()
-
-    if st.button("Stop Scanner"):
-        st.session_state.scanner_running = False
-
-    if st.session_state.scanner_running:
-        st.success("Scanner running (refreshes every 60 seconds)")
-    else:
-        st.info("Scanner stopped")
-
-# =========================
-# AUTO REFRESH (EVERY 60 SECONDS)
-# =========================
-if st.session_state.scanner_running:
-    st_autorefresh(interval=60_000, key="scanner_refresh")
-else:
-    st.stop()
+trigger_text = st.text_input(
+    "Edit Trigger",
+    value=trigger_formulas[trigger_condition]
+)
 
 # =========================
 # LOAD TICKERS
@@ -142,48 +109,8 @@ elif st.session_state.source_option == "Upload File":
         ]
     tickers = st.session_state.uploaded_tickers
 
-if not tickers:
-    st.stop()
-
 # =========================
-# CHUNKED DOWNLOAD
-# =========================
-def chunk_list(lst, size):
-    for i in range(0, len(lst), size):
-        yield lst[i:i+size]
-
-@st.cache_data(ttl=30)
-def fetch_data(tickers, timeframe):
-    frames = []
-
-    for chunk in chunk_list(tickers, 50):
-        df = yf.download(
-            tickers=chunk,
-            period="5d" if timeframe=="15m" else "1mo",
-            interval=timeframe,
-            group_by="ticker",
-            progress=False,
-            threads=True
-        )
-        frames.append(df)
-
-    if not frames:
-        return pd.DataFrame()
-
-    df = pd.concat(frames, axis=1)
-
-    if not isinstance(df.columns, pd.MultiIndex):
-        df = pd.concat({tickers[0]: df}, axis=1)
-
-    return df
-
-raw = fetch_data(tickers, st.session_state.timeframe)
-
-if raw.empty:
-    st.stop()
-
-# =========================
-# ADVANCED SAFE AST ENGINE
+# SAFE AST ENGINE
 # =========================
 operators = {
     ast.Gt: op.gt, ast.Lt: op.lt, ast.GtE: op.ge, ast.LtE: op.le,
@@ -194,7 +121,7 @@ operators = {
     ast.Or: lambda a,b: a or b
 }
 
-allowed_functions = {"abs": abs, "max": max, "min": min}
+ALLOWED_FIELDS = {"Open","High","Low","Close","Volume"}
 
 def check_trigger(df, condition):
 
@@ -211,12 +138,6 @@ def check_trigger(df, condition):
                 result = operators[type(node.op)](result, _eval(v))
             return result
 
-        elif isinstance(node, ast.UnaryOp):
-            if isinstance(node.op, ast.USub):
-                return -_eval(node.operand)
-            if isinstance(node.op, ast.Not):
-                return not _eval(node.operand)
-
         elif isinstance(node, ast.Compare):
             return operators[type(node.ops[0])](
                 _eval(node.left),
@@ -229,18 +150,9 @@ def check_trigger(df, condition):
                 _eval(node.right)
             )
 
-        elif isinstance(node, ast.Subscript):
-            field = node.value.id
-            index = node.slice.value if isinstance(node.slice, ast.Constant) else _eval(node.slice)
-            return get_value(field, index)
-
-        elif isinstance(node, ast.Call):
-            func_name = node.func.id
-            if func_name not in allowed_functions:
-                raise ValueError("Function not allowed")
-            return allowed_functions[func_name](*[_eval(arg) for arg in node.args])
-
         elif isinstance(node, ast.Name):
+            if node.id not in ALLOWED_FIELDS:
+                raise ValueError("Invalid field")
             return get_value(node.id)
 
         elif isinstance(node, ast.Constant):
@@ -256,117 +168,110 @@ def check_trigger(df, condition):
         return False
 
 # =========================
-# PROCESS TICKERS
+# SCAN BUTTON
 # =========================
-results = []
+if st.button("Scan Market", type="primary"):
 
-for ticker in tickers:
-    if ticker not in raw:
-        continue
+    if not tickers:
+        st.warning("No tickers loaded.")
+        st.stop()
 
-    df = raw[ticker].dropna().tail(15)
-    if df.empty:
-        continue
+    with st.spinner("Scanning..."):
 
-    triggered = check_trigger(df, st.session_state.active_trigger)
-    results.append((ticker, df, triggered))
-
-results.sort(key=lambda x: not x[2])
-triggered_count = sum(1 for r in results if r[2])
-
-# =========================
-# ALERT LOGIC (WITH RETRIGGER)
-# =========================
-if st.session_state.alerts_active and triggered_count > 0:
-
-    triggered_tickers = [r[0] for r in results if r[2]]
-    new_triggers = [
-        t for t in triggered_tickers
-        if t not in st.session_state.alerted_tickers
-    ]
-
-    if new_triggers:
-        message = (
-            f"{st.session_state.active_trigger}\n"
-            f"Triggered: {', '.join(new_triggers)}"
+        raw = yf.download(
+            tickers=tickers,
+            period="5d" if st.session_state.timeframe=="15m" else "1mo",
+            interval=st.session_state.timeframe,
+            group_by="ticker",
+            progress=False,
+            threads=True
         )
 
-        requests.post(
-            f"https://api.telegram.org/bot{telegram_token}/sendMessage",
-            data={"chat_id": telegram_chat_id, "text": message}
-        )
+        if raw.empty:
+            st.warning("No data received.")
+            st.stop()
 
-        try:
-            msg = MIMEMultipart()
-            msg["From"] = gmail_user
-            msg["To"] = ",".join(alert_emails)
-            msg["Subject"] = "YachtCode Alert"
-            msg.attach(MIMEText(message, "plain"))
+        if not isinstance(raw.columns, pd.MultiIndex):
+            raw = pd.concat({tickers[0]: raw}, axis=1)
 
-            server = smtplib.SMTP("smtp.gmail.com", 587)
-            server.starttls()
-            server.login(gmail_user, gmail_password)
-            server.sendmail(gmail_user, alert_emails, msg.as_string())
-            server.quit()
-        except:
-            pass
+        results = []
 
-        st.session_state.alerted_tickers.update(new_triggers)
+        for ticker in tickers:
+            if ticker not in raw:
+                continue
 
-# allow retrigger
-currently_triggered = {r[0] for r in results if r[2]}
-st.session_state.alerted_tickers.intersection_update(currently_triggered)
+            df = raw[ticker].dropna().tail(15)
+            if df.empty:
+                continue
 
-# =========================
-# RIGHT PANEL (RESULTS)
-# =========================
-with right_col:
-    st.header(f"Results ({triggered_count}/{len(results)})")
+            triggered = check_trigger(df, trigger_text)
+            current_price = float(df["Close"].iloc[-1])
 
-    for ticker, df, triggered in results:
-        latest = float(df["Close"].iloc[-1])
-        prev = float(df["Close"].iloc[-2])
-        pct = ((latest - prev)/prev)*100
+            results.append({
+                "Ticker": f"🚨 {ticker}" if triggered else ticker,
+                "RawTicker": ticker,
+                "Current Price": round(current_price, 2),
+                "Triggered": triggered
+            })
 
-        label = f"🚨 {ticker}" if triggered else ticker
+        if not results:
+            st.info("No data available.")
+            st.stop()
 
-        if st.button(label, key=f"select_{ticker}"):
-            st.session_state.selected_ticker = ticker
+        result_df = pd.DataFrame(results)
+        result_df = result_df.sort_values(by="Triggered", ascending=False)
 
-        st.caption(f"{latest:.2f} ({pct:+.2f}%)")
-        st.divider()
+        display_df = result_df[["Ticker", "Current Price"]]
+        triggered_count = result_df["Triggered"].sum()
 
-# =========================
-# CENTER PANEL (CHART)
-# =========================
-with center_col:
-    st.header("Chart")
+        st.success(f"{triggered_count} Stocks Triggered")
+        st.dataframe(display_df, use_container_width=True)
 
-    if st.session_state.selected_ticker:
-        selected = next(
-            (r for r in results if r[0]==st.session_state.selected_ticker),
-            None
-        )
-        if selected:
-            ticker, df, triggered = selected
+        # =========================
+        # ALERT LOGIC
+        # =========================
+        if st.session_state.alerts_active:
 
-            st.subheader(f"{ticker}")
-            fig = go.Figure(data=[go.Candlestick(
-                x=df.index,
-                open=df["Open"],
-                high=df["High"],
-                low=df["Low"],
-                close=df["Close"]
-            )])
+            triggered_tickers = result_df[
+                result_df["Triggered"]
+            ]["RawTicker"].tolist()
 
-            fig.update_layout(
-                height=650,
-                xaxis_rangeslider_visible=False,
-                template="plotly_white"
-            )
+            new_triggers = [
+                t for t in triggered_tickers
+                if t not in st.session_state.alerted_tickers
+            ]
 
-            st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Click a ticker on the right to load chart.")
+            if new_triggers:
 
+                message = (
+                    f"{trigger_text}\n"
+                    f"Triggered: {', '.join(new_triggers)}"
+                )
 
+                # Telegram
+                requests.post(
+                    f"https://api.telegram.org/bot{telegram_token}/sendMessage",
+                    data={"chat_id": telegram_chat_id, "text": message}
+                )
+
+                # Email
+                try:
+                    msg = MIMEMultipart()
+                    msg["From"] = gmail_user
+                    msg["To"] = ",".join(alert_emails)
+                    msg["Subject"] = "YachtCode Alert"
+                    msg.attach(MIMEText(message, "plain"))
+
+                    server = smtplib.SMTP("smtp.gmail.com", 587)
+                    server.starttls()
+                    server.login(gmail_user, gmail_password)
+                    server.sendmail(gmail_user, alert_emails, msg.as_string())
+                    server.quit()
+
+                except Exception as e:
+                    st.error(f"Email error: {e}")
+
+                st.session_state.alerted_tickers.update(new_triggers)
+
+            # Retrigger logic
+            st.session_state.alerted_tickers.intersection_update(triggered_tickers)
