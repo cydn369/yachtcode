@@ -22,10 +22,9 @@ defaults = {
     "active_trigger": None,
     "uploaded_tickers": [],
     "timeframe": "1d",
-    "source_option": "YFinance",  # Default to YFinance
+    "source_option": "Nifty50",
     "alerts_active": False,
-    "alerted_tickers": set(),
-    "kotak_neo_api_key": "",  # Store Kotak Neo API Key
+    "alerted_tickers": set()
 }
 
 for k, v in defaults.items():
@@ -62,26 +61,19 @@ left_col, right_col = st.columns([1, 2])
 with left_col:
     st.header("Controls")
 
-    # Data Source Section
-    st.subheader("Data Source")
-    st.session_state.source_option = st.radio(
-        "Choose Data Source",
-        ["YFinance", "Kotak Neo"],
-        index=["YFinance", "Kotak Neo"].index(st.session_state.source_option)
-    )
-
     st.session_state.timeframe = st.selectbox(
         "Timeframe",
         ["15m", "1d"],
         index=["15m", "1d"].index(st.session_state.timeframe)
     )
 
-    # If Kotak Neo is selected, show additional fields
-    if st.session_state.source_option == "Kotak Neo":
-        st.write("To fetch data from Kotak Neo, you need to provide the following information:")
-        st.text_input("Kotak Neo API Key", value=st.session_state.kotak_neo_api_key, key="kotak_neo_api_key")
-        st.write("You may also need portfolio details depending on the type of data you wish to access.")
-    
+    st.session_state.source_option = st.radio(
+        "Ticker Source",
+        ["Nifty50", "Nifty500", "Forex Pairs", "Upload File"],
+        index=["Nifty50","Nifty500","Forex Pairs","Upload File"]
+        .index(st.session_state.source_option)
+    )
+
     st.session_state.alerts_active = st.checkbox(
         "Activate Alerts",
         value=st.session_state.alerts_active
@@ -98,15 +90,7 @@ with left_col:
 # =========================
 tickers = []
 
-if st.session_state.source_option in ["YFinance"]:
-    file_map = {
-        "YFinance": "Nifty50.txt",  # Default file for YFinance
-    }
-    with open(file_map[st.session_state.source_option], "r") as f:
-        content = f.read()
-    tickers = [t.strip().upper() for t in content.split(",") if t.strip()]
-
-elif st.session_state.source_option in ["Nifty50", "Nifty500", "Forex Pairs"]:
+if st.session_state.source_option in ["Nifty50","Nifty500","Forex Pairs"]:
     file_map = {
         "Nifty50": "Nifty50.txt",
         "Nifty500": "Nifty500.txt",
@@ -122,18 +106,6 @@ elif st.session_state.source_option == "Upload File":
         content = uploaded.read().decode("utf-8")
         st.session_state.uploaded_tickers = [
             t.strip().upper()
-            for t in content.replace("\n", ",").split(",")
-            if t.strip()
-        ]
-    tickers = st.session_state.uploaded_tickers
-
-elif st.session_state.source_option == "Kotak Neo":
-    # Kotak Neo specific ticker loading logic (remove '.NS' suffix)
-    uploaded = st.file_uploader("Upload Kotak Neo tickers", type=["txt", "csv"])
-    if uploaded:
-        content = uploaded.read().decode("utf-8")
-        st.session_state.uploaded_tickers = [
-            t.strip().replace(".NS", "").upper()  # Removing '.NS' from tickers for Kotak Neo
             for t in content.replace("\n", ",").split(",")
             if t.strip()
         ]
@@ -289,3 +261,4 @@ with right_col:
                     st.session_state.alerted_tickers.update(new_triggers)
 
                 st.session_state.alerted_tickers.intersection_update(triggered_tickers)
+
