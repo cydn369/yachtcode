@@ -173,6 +173,7 @@ with right_col:
     st.header("Results")
 
     if scan_clicked:
+        st.write(f"Last scanned: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         if not tickers:
             st.warning("No tickers loaded.")
             st.stop()
@@ -261,4 +262,5 @@ with right_col:
                     st.session_state.alerted_tickers.update(new_triggers)
 
                 st.session_state.alerted_tickers.intersection_update(triggered_tickers)
+
 
