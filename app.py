@@ -8,6 +8,7 @@ import requests
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 
 # =========================
 # PAGE CONFIG AND BACKGROUND
@@ -262,5 +263,6 @@ with right_col:
                     st.session_state.alerted_tickers.update(new_triggers)
 
                 st.session_state.alerted_tickers.intersection_update(triggered_tickers)
+
 
 
