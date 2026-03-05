@@ -23,8 +23,8 @@ defaults = {
     "active_trigger": None,
     "uploaded_tickers": [],
     "timeframe": "1d",
-    "source_option": "Nifty50",
-    "alerts_active": False,
+    "source_option": "Nifty500",
+    "alerts_active": True,
     "alerted_tickers": set()
 }
 
@@ -263,6 +263,7 @@ with right_col:
                     st.session_state.alerted_tickers.update(new_triggers)
 
                 st.session_state.alerted_tickers.intersection_update(triggered_tickers)
+
 
 
 
